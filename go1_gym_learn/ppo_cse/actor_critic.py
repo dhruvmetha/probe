@@ -34,7 +34,7 @@ class ActorCritic(nn.Module):
         self.num_privileged_obs = num_privileged_obs
 
         activation = get_activation(AC_Args.activation)
-
+ 
         # Adaptation module
         adaptation_module_layers = []
         adaptation_module_layers.append(nn.Linear(self.num_obs_history, AC_Args.adaptation_module_branch_hidden_dims[0]))

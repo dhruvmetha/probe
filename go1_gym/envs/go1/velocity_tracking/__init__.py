@@ -7,16 +7,19 @@ from go1_gym.envs.base.legged_robot import LeggedRobot
 from go1_gym.envs.base.legged_robot_config import Cfg
 
 
+
 class VelocityTrackingEasyEnv(LeggedRobot):
-    def __init__(self, sim_device, headless, num_envs=None, prone=False, deploy=False,
-                 cfg: Cfg = None, eval_cfg: Cfg = None, initial_dynamics_dict=None, physics_engine="SIM_PHYSX"):
+    def __init__(self, gym, sim, num_envs, cfg: Cfg, sim_params, env_origins, eval_cfg=None,
+                 initial_dynamics_dict=None, device='cuda:0'):
 
         if num_envs is not None:
             cfg.env.num_envs = num_envs
+        self.num_envs = num_envs
 
-        sim_params = gymapi.SimParams()
-        gymutil.parse_sim_config(vars(cfg.sim), sim_params)
-        super().__init__(cfg, sim_params, physics_engine, sim_device, headless, eval_cfg, initial_dynamics_dict)
+        # sim_params = gymapi.SimParams()
+        # gymutil.parse_sim_config(vars(cfg.sim), sim_params)
+        super().__init__(gym, sim, cfg, sim_params, env_origins, eval_cfg=eval_cfg,
+                 initial_dynamics_dict=initial_dynamics_dict, device=device)
 
 
     def step(self, actions):

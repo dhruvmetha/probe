@@ -3,8 +3,8 @@
 import sys
 
 import gym
-import torch
 from isaacgym import gymapi, gymutil
+import torch
 
 from gym import spaces
 import numpy as np
@@ -40,14 +40,14 @@ class BaseTask(gym.Env):
         self.num_privileged_obs = cfg.env.num_privileged_obs
         self.num_actions = cfg.env.num_actions
 
-        if eval_cfg is not None:
-            self.num_eval_envs = eval_cfg.env.num_envs
-            self.num_train_envs = cfg.env.num_envs
-            self.num_envs = self.num_eval_envs + self.num_train_envs
-        else:
-            self.num_eval_envs = 0
-            self.num_train_envs = cfg.env.num_envs
-            self.num_envs = cfg.env.num_envs
+        # if eval_cfg is not None:
+        #     self.num_eval_envs = eval_cfg.env.num_envs
+        #     self.num_train_envs = cfg.env.num_envs
+        #     self.num_envs = self.num_eval_envs + self.num_train_envs
+        # else:
+        #     self.num_eval_envs = 0
+        #     self.num_train_envs = cfg.env.num_envs
+        #     self.num_envs = cfg.env.num_envs
 
         # optimization flags for pytorch JIT
         torch._C._jit_set_profiling_mode(False)
@@ -58,7 +58,7 @@ class BaseTask(gym.Env):
         self.rew_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.rew_buf_pos = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.rew_buf_neg = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
-        self.reset_buf = torch.ones(self.num_envs, device=self.device, dtype=torch.long)
+        self.reset_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
         self.time_out_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self.privileged_obs_buf = torch.zeros(self.num_envs, self.num_privileged_obs, device=self.device,
