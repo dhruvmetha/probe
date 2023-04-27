@@ -45,12 +45,12 @@ def class_to_dict(obj) -> dict:
 class RunnerArgs(PrefixProto, cli=False):
     # runner
     algorithm_class_name = 'RMA'
-    num_steps_per_env = 24  # per iteration
+    num_steps_per_env = 25  # per iteration
     max_iterations = 1500  # number of policy updates
 
     # logging
     save_interval = 400  # check for potential saves every this many iterations
-    save_video_interval = 100
+    save_video_interval = 60
     log_freq = 10
 
     # load and resume
@@ -248,7 +248,8 @@ class Runner:
                     # logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/", once=False)
 
                     body_path = f'{path}/body_latest.jit'
-                    body_model = copy.deepcopy(torch.nn.Sequential(self.alg.actor_critic.shared_memory, self.alg.actor_critic.actor)).to('cpu')
+                    # body_model = copy.deepcopy(torch.nn.Sequential(self.alg.actor_critic.shared_memory, self.alg.actor_critic.actor)).to('cpu')
+                    body_model = copy.deepcopy(self.alg.actor_critic.actor).to('cpu')
                     traced_script_body_module = torch.jit.script(body_model)
                     traced_script_body_module.save(body_path)
 

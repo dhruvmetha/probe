@@ -5,7 +5,7 @@ from params_proto import PrefixProto, ParamsProto
 
 class Cfg(PrefixProto, cli=False):
     class env(PrefixProto, cli=False):
-        num_envs = 100
+        num_envs = 2048
         num_observations = 9
         num_scalar_observations = 9
         # if not None a privilige_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
@@ -14,7 +14,7 @@ class Cfg(PrefixProto, cli=False):
         num_observation_history = 30
         env_spacing = 8.  # not used with heightfields/trimeshes
         send_timeouts = True  # send time out information to the algorithm
-        episode_length_s = 15  # episode length in seconds
+        episode_length_s = 25  # episode length in seconds
         train_test_split = 0.95  # fraction of envs to use for training       
 
 
@@ -283,7 +283,7 @@ class Cfg(PrefixProto, cli=False):
         # step rewards
         action_energy = -0.001
         action_rate = -0.01
-        collision = -0.001
+        collision = -0.01
         zero_velocity = -0.2
         
         # side_limits = -0.75

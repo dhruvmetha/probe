@@ -83,9 +83,9 @@ class ActorCritic(nn.Module):
         self.input_size = num_obs # + num_privileged_obs
         self.output_size = num_actions
 
-        self.shared_memory =  SharedLayers(self.input_size, 128)
-        self.actor = Actor(128, self.output_size)
-        self.critic = Critic(128, 1)
+        # self.shared_memory =  SharedLayers(self.input_size, 128)
+        self.actor = Actor(self.input_size, self.output_size)
+        self.critic = Critic(self.input_size, 1)
 
         # Action noise
         self.std = nn.Parameter(AC_Args.init_noise_std * torch.ones(num_actions))
@@ -94,7 +94,8 @@ class ActorCritic(nn.Module):
         Normal.set_default_validate_args = False
 
     def act_evaluate(self, observations, privileged_obs, **kwargs):
-        state = self.shared_memory(torch.cat([observations], dim=-1))
+        # state = self.shared_memory(torch.cat([observations], dim=-1))
+        state = observations
         self.update_distribution(state)
         value = self.critic(state)
         return self.distribution.sample(), value
@@ -104,12 +105,14 @@ class ActorCritic(nn.Module):
         self.distribution = Normal(mean, mean * 0. + self.std)
 
     def act(self, observations, privileged_obs, **kwargs):
-        state = self.shared_memory(torch.cat([observations], dim=-1))
+        # state = self.shared_memory(torch.cat([observations], dim=-1))
+        state = observations
         self.update_distribution(state)
         return self.distribution.sample()
         
     def evaluate(self, observations, privileged_obs, **kwargs):
-        state = self.shared_memory(torch.cat([observations], dim=-1))
+        # state = self.shared_memory(torch.cat([observations], dim=-1))
+        state = observations
         return self.critic(state)
 
     def get_actions_log_prob(self, actions):

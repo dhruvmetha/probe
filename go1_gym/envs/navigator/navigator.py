@@ -201,6 +201,8 @@ class Navigator(BaseTask):
         self.rew_buf_neg[:] = 0.
         for i in range(len(self.reward_functions)):
             name = self.reward_names[i]
+            if 'terminal' in name:
+                continue
             rew = self.reward_functions[i]() * self.reward_scales[name]
             self.rew_buf += rew
             if torch.sum(rew) >= 0:
@@ -208,6 +210,20 @@ class Navigator(BaseTask):
             elif torch.sum(rew) <= 0:
                 self.rew_buf_neg += rew
             self.episode_sums[name] += rew
+        
+        env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
+        if len(env_ids) > 0:
+            for i in range(len(self.reward_functions)):
+                name = self.reward_names[i]
+                if 'terminal' not in name:
+                    continue
+                rew = self.reward_functions[i]() * self.reward_scales[name]
+                self.rew_buf += rew
+                if torch.sum(rew) >= 0:
+                    self.rew_buf_pos += rew
+                elif torch.sum(rew) <= 0:
+                    self.rew_buf_neg += rew
+                self.episode_sums[name] += rew
         # if self.cfg.rewards.only_positive_rewards:
         #     self.rew_buf[:] = torch.clip(self.rew_buf[:], min=0.)
         # elif self.cfg.rewards.only_positive_rewards_ji22_style: #TODO: update
@@ -224,13 +240,15 @@ class Navigator(BaseTask):
         self.base_quat = self.legged_env.base_quat[:, :]
         obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
-        
         # setup obs buf and scale it to normalize observations
-        self.obs_buf[:] = torch.cat([self.legged_env.base_pos[:, :2] - self.env_origins[:, :2], 
-                                    obs_yaw, 
-                                    self.legged_env.base_lin_vel[:, :2],    
-                                    self.legged_env.base_ang_vel[:, 2:], self.actions[:, :3]], dim = -1)
+        self.obs_buf[:] = torch.cat([(self.legged_env.base_pos[:, :1] - self.env_origins[:, :1]) * 0.33,
+                                    (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), 
+                                    obs_yaw * (1/3.14), 
+                                    self.legged_env.base_lin_vel[:, :2] * (1/0.65),    
+                                    self.legged_env.base_ang_vel[:, 2:] * (1/0.65), 
+                                    self.actions[:, :3]*(1/0.65)], dim = -1)
         # add scaled noise
+
 
         # setup privileged obs buf and scale it to normalize observations
         self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
@@ -332,7 +350,7 @@ class Navigator(BaseTask):
     def _render_headless(self):
         if self.record_now and self.complete_video_frames is not None and len(self.complete_video_frames) == 0:
             bx, by, bz = self.legged_env.base_pos[0, 0], self.legged_env.base_pos[0, 1], self.legged_env.base_pos[0, 2]
-            self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(bx, by - 1.0, bz + 1.0),
+            self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(bx - 1.0, by, bz + 2.0),
                                          gymapi.Vec3(bx, by, bz))
             self.video_frame = self.gym.get_camera_image(self.sim, self.envs[0], self.rendering_camera,
                                                          gymapi.IMAGE_COLOR)
@@ -345,7 +363,7 @@ class Navigator(BaseTask):
                 bx, by, bz = self.legged_env.base_pos[self.num_train_envs, 0], self.legged_env.base_pos[self.num_train_envs, 1], \
                              self.legged_env.base_pos[self.num_train_envs, 2]
                 self.gym.set_camera_location(self.rendering_camera_eval, self.envs[self.num_train_envs],
-                                             gymapi.Vec3(bx, by - 1.0, bz + 1.0),
+                                             gymapi.Vec3(bx -1.0, by, bz + 2.0),
                                              gymapi.Vec3(bx, by, bz))
                 self.video_frame_eval = self.gym.get_camera_image(self.sim, self.envs[self.num_train_envs],
                                                                   self.rendering_camera_eval,
@@ -435,7 +453,8 @@ class Navigator(BaseTask):
             if scale == 0:
                 self.reward_scales.pop(key)
             else:
-                self.reward_scales[key] *= self.dt
+                if 'terminal' not in key: 
+                    self.reward_scales[key] *= self.dt
         # prepare list of functions
         self.reward_functions = []
         self.reward_names = []

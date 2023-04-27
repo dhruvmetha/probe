@@ -17,7 +17,7 @@ class CoRLRewards:
     
     def _reward_terminal_distance_gs(self):
         # print(self.gs_buf * 1.0)
-        return self.env.gs_buf * self.env.reset_buf * 1.0
+        return self.env.gs_buf * 1.0
 
     def _reward_terminal_time_out(self):
         return (self.env.time_out_buf & ~self.env.gs_buf) * 1.0
