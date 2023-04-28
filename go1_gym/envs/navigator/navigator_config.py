@@ -281,7 +281,7 @@ class Cfg(PrefixProto, cli=False):
         terminal_time_out = -5.0 # -5.0
 
         # step rewards
-        action_energy = -0.001
+        action_energy = -0.005
         action_rate = -0.01
         collision = -0.01
         zero_velocity = -0.2

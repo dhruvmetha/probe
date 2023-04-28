@@ -23,7 +23,7 @@ if __name__ == "__main__":
     env = Navigator(Cfg, sim_device='cuda:0', headless=False)
     env = NavigationHistoryWrapper(env)
     
-    actor_critic = ActorCritic(env.num_obs, env.num_privileged_obs, env.num_actions)
+    actor_critic = ActorCritic(env.num_obs, env.num_privileged_obs, env.num_obs_history, env.num_actions)
     weights = logger.load_torch("checkpoints/ac_weights_last.pt")
     actor_critic.load_state_dict(state_dict=weights)
     actor_critic.to(env.device)
@@ -31,9 +31,11 @@ if __name__ == "__main__":
     
     obs = env.reset()
 
-    num_eval_steps = 1000
+    num_eval_steps = 5000
     for i in range(num_eval_steps):
-        obs, _, _, _ = env.step(policy(obs['obs'], obs['privileged_obs']))
+        actions = policy(obs['obs_history'], obs['privileged_obs'])
+        print(actions[0])
+        obs, _, _, _ = env.step(actions)
 
     # runner = Runner(env, device=f"cuda:{gpu_id}")
     # runner.learn(num_learning_iterations=100000,init_at_random_ep_len=False, eval_freq=100)
