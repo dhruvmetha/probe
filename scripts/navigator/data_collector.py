@@ -11,6 +11,18 @@ from ml_logger import logger
 from go1_gym import MINI_GYM_ROOT_DIR
 from high_level_control.actor_critic import ActorCritic
 
+import multiprocessing as mp
+
+def worker(queue):
+    while True:
+        item = queue.get()
+        if item is None:
+            break
+        # do something with the item
+        print(f"Process {mp.current_process().name} processed item {item}")
+        queue.task_done()
+
+
 def load_policy(env):
     actor_critic = ActorCritic(env.num_obs, env.num_privileged_obs, env.num_obs_history, env.num_actions)
     weights = logger.load_torch("checkpoints/ac_weights_last.pt")
@@ -21,6 +33,20 @@ def load_policy(env):
     return policy
 
 if __name__ == "__main__":
+
+
+    queue_1 = mp.JoinableQueue()
+    queue_2 = mp.JoinableQueue()
+
+    p1 = mp.Process(target=worker, args=(queue_1,))
+    p1.daemon = True  # process will exit when the main process exits
+    p1.start()
+
+    p2 = mp.Process(target=worker, args=(queue_2,))
+    p2.daemon = True
+    p2.start()
+
+
     
     recent_runs = sorted(glob.glob(f"{MINI_GYM_ROOT_DIR}/runs/high_level_policy/*/*/*"), key=os.path.getmtime)
     model_path = recent_runs[-1]
@@ -37,19 +63,9 @@ if __name__ == "__main__":
     
     num_eval_steps = 5000
 
-    env.start_recording()
-    record_torques = []
     for i in range(num_eval_steps):
         with torch.inference_mode():
             actions = policy(obs['obs_history'], obs['privileged_obs'])
-            obs, _, _, _ = env.step(actions)
-            record_torques.append(env.legged_env.torques[0])
-        
-        frames = env.get_complete_frames()
-        if len(frames) > 0:
-            print('LOGGING_VIDEO')
-            env.pause_recording()
-            logger.save_video(frames, f"eval_videos/{i:05d}.mp4", fps=1 / (env.dt))
-            logger.save_pkl(record_torques[-len(frames):], path=f'eval_torques/torques_{i}.pkl')
-            record_torques = []
-            env.start_recording()
+            obs, rewards, dones, info = env.step(actions)
+            
+            # env_dones = dones.nonzero().flatten

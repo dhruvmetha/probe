@@ -131,7 +131,7 @@ class WorldAsset():
             asset_names = ['wall_left' , 'wall_right', 'wall_back', 'wall_front']
 
             # all base positions
-            asset_pos = [[1., -1.05, .5],  [1., 1.05, .5], [-0.75, 0., .5], [4.0, 0., 0.5]]
+            asset_pos = [[1., -1.2, .5],  [1., 1.2, .5], [-0.75, 0., .5], [4.0, 0., 0.5]]
 
             self.base_assets = [AssetDef(asset, name, pos) for asset, name, pos in zip(gym_assets, asset_names, asset_pos)]
         
