@@ -77,10 +77,11 @@ class SharedLayers(nn.Module):
 class ActorCritic(nn.Module):
     def __init__(self, num_obs,
                  num_privileged_obs,
+                 num_obs_history,
                  num_actions):
 
         super().__init__()
-        self.input_size = num_obs # + num_privileged_obs
+        self.input_size = num_obs_history # num_obs #  + num_privileged_obs
         self.output_size = num_actions
 
         # self.shared_memory =  SharedLayers(self.input_size, 128)
@@ -117,6 +118,9 @@ class ActorCritic(nn.Module):
 
     def get_actions_log_prob(self, actions):
         return self.distribution.log_prob(actions).sum(dim=-1)
+
+    def act_inference(self, observations, privileged_obs, **kwargs):
+        return self.actor(observations)
     
     @property
     def action_mean(self):

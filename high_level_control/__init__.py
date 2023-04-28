@@ -49,7 +49,7 @@ class RunnerArgs(PrefixProto, cli=False):
     max_iterations = 1500  # number of policy updates
 
     # logging
-    save_interval = 400  # check for potential saves every this many iterations
+    save_interval = 200  # check for potential saves every this many iterations
     save_video_interval = 60
     log_freq = 10
 
@@ -71,7 +71,8 @@ class Runner:
 
         actor_critic = ActorCritic(self.env.num_obs,
                                       self.env.num_privileged_obs,
-                                      self.env.num_actions,
+                                      self.env.num_obs_history,
+                                      self.env.num_actions
                                       ).to(self.device)
 
         if RunnerArgs.resume:
@@ -138,15 +139,14 @@ class Runner:
             # Rollout
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
-                    actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs],
-                                                 obs_history[:num_train_envs])
+                    actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs], obs_history[:num_train_envs])
                     # if eval_expert:
                     #     actions_eval = self.alg.actor_critic.act_teacher(obs_history[num_train_envs:],
                     #                                                      privileged_obs[num_train_envs:])
                     # else:
                     #     actions_eval = self.alg.actor_critic.act_student(obs_history[num_train_envs:])
 
-                    actions_eval = self.alg.actor_critic.act(obs[num_train_envs:], privileged_obs[num_train_envs:])
+                    actions_eval = self.alg.actor_critic.act(obs_history[num_train_envs:], privileged_obs[num_train_envs:])
 
                     ret = self.env.step(torch.cat((actions_train, actions_eval), dim=0))
                     obs_dict, rewards, dones, infos = ret
@@ -192,7 +192,7 @@ class Runner:
 
                 # Learning step
                 start = stop
-                self.alg.compute_returns(obs[:num_train_envs], privileged_obs[:num_train_envs])
+                self.alg.compute_returns(obs_history[:num_train_envs], privileged_obs[:num_train_envs])
 
                 # if it % curriculum_dump_freq == 0:
                 #     logger.save_pkl({"iteration": it,
@@ -300,14 +300,14 @@ class Runner:
                 print("LOGGING EVAL VIDEO")
                 logger.save_video(frames, f"videos/{it:05d}_eval.mp4", fps=1 / self.env.dt)
 
-    def get_inference_policy(self, device=None):
-        self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)
-        if device is not None:
-            self.alg.actor_critic.to(device)
-        return self.alg.actor_critic.act_inference
+    # def get_inference_policy(self, device=None):
+    #     self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)
+    #     if device is not None:
+    #         self.alg.actor_critic.to(device)
+    #     return self.alg.actor_critic.act_inference
 
-    def get_expert_policy(self, device=None):
-        self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)
-        if device is not None:
-            self.alg.actor_critic.to(device)
-        return self.alg.actor_critic.act_expert
+    # def get_expert_policy(self, device=None):
+    #     self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)
+    #     if device is not None:
+    #         self.alg.actor_critic.to(device)
+    #     return self.alg.actor_critic.act_expert

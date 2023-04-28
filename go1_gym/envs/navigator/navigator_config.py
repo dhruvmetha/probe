@@ -11,7 +11,7 @@ class Cfg(PrefixProto, cli=False):
         # if not None a privilige_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
         num_privileged_obs = 21
         num_actions = 3 # 13
-        num_observation_history = 30
+        num_observation_history = 50
         env_spacing = 8.  # not used with heightfields/trimeshes
         send_timeouts = True  # send time out information to the algorithm
         episode_length_s = 25  # episode length in seconds

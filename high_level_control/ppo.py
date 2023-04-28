@@ -58,7 +58,7 @@ class PPO:
 
     def act(self, obs, privileged_obs, obs_history):
         # Compute the actions and values
-        actions, value =  self.actor_critic.act_evaluate(obs, privileged_obs)
+        actions, value =  self.actor_critic.act_evaluate(obs_history, privileged_obs)
         self.transition.actions = actions.detach() # self.actor_critic.act(obs_history).detach()
         self.transition.values = value.detach() # self.actor_critic.evaluate(obs_history, privileged_obs).detach()
         self.transition.actions_log_prob = self.actor_critic.get_actions_log_prob(self.transition.actions).detach()
@@ -102,7 +102,7 @@ class PPO:
         for obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
             old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
 
-            _, value_batch = self.actor_critic.act_evaluate(obs_batch, privileged_obs_batch, masks=masks_batch)
+            _, value_batch = self.actor_critic.act_evaluate(obs_history_batch, privileged_obs_batch, masks=masks_batch)
             actions_log_prob_batch = self.actor_critic.get_actions_log_prob(actions_batch)
             # value_batch = self.actor_critic.evaluate(obs_history_batch, privileged_obs_batch, masks=masks_batch)
             mu_batch = self.actor_critic.action_mean

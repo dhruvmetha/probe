@@ -258,6 +258,8 @@ class Navigator(BaseTask):
     def reset(self):
         self.legged_env_obs = self.legged_env.reset()
         self.world_env_obs = self.world_env.reset()
+
+        return self.obs_buf
     
     def reset_idx(self, env_ids):
 
