@@ -6,7 +6,7 @@ from params_proto import PrefixProto, ParamsProto
 class Cfg(PrefixProto, cli=False):
     class env(PrefixProto, cli=False):
         num_envs = 2048
-        num_observations = 9
+        num_observations = 6 + 12 + 21 # 9 + 21
         num_scalar_observations = 9
         # if not None a privilige_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
         num_privileged_obs = 21
@@ -281,10 +281,10 @@ class Cfg(PrefixProto, cli=False):
         terminal_time_out = -5.0 # -5.0
 
         # step rewards
-        action_energy = -0.005
-        action_rate = -0.01
+        action_energy = 0.0 # -0.1
+        action_rate = 0.0 # -0.005
         collision = -0.01
-        zero_velocity = -0.2
+        zero_velocity = -0.05
         
         # side_limits = -0.75
         # back_limits = -0.25
@@ -313,6 +313,16 @@ class Cfg(PrefixProto, cli=False):
         motion = [-0.01, 0.01]
 
     class obs_scales(PrefixProto, cli=False):
+
+
+        x_pos = 0.33
+        y_pos = 1
+        yaw = (1/3.14)
+        lin_vel = (1/0.65)
+        ang_vel = (1/0.65)
+        actions = (1/0.65)
+
+
         lin_vel = 2.0
         ang_vel = 0.25
         dof_pos = 1.0

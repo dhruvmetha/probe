@@ -22,8 +22,14 @@ class CoRLRewards:
     def _reward_terminal_time_out(self):
         return (self.env.time_out_buf & ~self.env.gs_buf) * 1.0
 
+    def _reward_torque_energy(self):
+        return torch.sum(torch.square(self.env.legged_env.torques), dim=-1)
+
     def _reward_action_energy(self):
-        return torch.sum(torch.square(self.env.actions), dim=-1)
+        return torch.sum(torch.square((torch.abs(self.env.actions) > 0.3) * self.env.actions), dim=-1)
+
+        # return torch.sum(torch.square(self.env.actions), dim=-1)
+        # return torch.sum(torch.square(self.env.actions), dim=-1)
 
     def _reward_action_rate(self):
         return torch.sum(torch.square(self.env.last_actions - self.env.actions), dim=1)

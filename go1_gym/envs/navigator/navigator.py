@@ -146,6 +146,8 @@ class Navigator(BaseTask):
 
         self.actions[:, :3] = torch.clamp(actions[:, :3], -0.65, 0.65)
 
+        # print(torch.sum(torch.square(self.actions[0])))
+
         new_actions = torch.cat([self.actions, self.commands], dim=1)
 
         for i in range(self.cfg.control.decimation):
@@ -241,24 +243,27 @@ class Navigator(BaseTask):
         obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
         # setup obs buf and scale it to normalize observations
-        self.obs_buf[:] = torch.cat([(self.legged_env.base_pos[:, :1] - self.env_origins[:, :1]) * 0.33,
-                                    (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), 
-                                    obs_yaw * (1/3.14), 
-                                    self.legged_env.base_lin_vel[:, :2] * (1/0.65),    
-                                    self.legged_env.base_ang_vel[:, 2:] * (1/0.65), 
-                                    self.actions[:, :3]*(1/0.65)], dim = -1)
+        obs = torch.cat([(self.legged_env.base_pos[:, :1] - self.env_origins[:, :1]) * 0.33, (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw * (1/3.14), self.legged_env.base_lin_vel[:, :2] * (1/0.65), self.legged_env.base_ang_vel[:, 2:] * (1/0.65)], dim = -1)
         # add scaled noise
+
+        low_level_obs = self.legged_env.actions.clone()
+        # low_level_obs = self.legged_env_obs['obs'].clone()
+        # print(low_level_obs.shape)
 
 
         # setup privileged obs buf and scale it to normalize observations
         self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
         self.privileged_obs_buf[:] = self.world_env_obs.clone()
+        priv_obs = self.privileged_obs_buf.clone()
         # add scaled noise
+
+        self.obs_buf[:] = torch.cat([obs, low_level_obs, priv_obs], dim=-1)
+
+        # self.obs_buf[:] = torch.cat([obs, priv_obs[:, :2], priv_obs[:, 2:3]*0.33, priv_obs[:, 3:4], priv_obs[:, 4:5] * (1/3.14), priv_obs[5:6]], dim=-1)
 
     def reset(self):
         self.legged_env_obs = self.legged_env.reset()
         self.world_env_obs = self.world_env.reset()
-
         return self.obs_buf
     
     def reset_idx(self, env_ids):

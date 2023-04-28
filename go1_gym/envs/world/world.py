@@ -170,7 +170,7 @@ class WorldAsset():
 
                 sizes = [j() for j in i['size'][idx]]
                 volume = np.prod(sizes)
-                mass = np.random.uniform(0.9, 1.0)
+                mass = np.random.uniform(1.0, 2.5)
                 density = mass/volume
 
                 if 'fixed' in name:
