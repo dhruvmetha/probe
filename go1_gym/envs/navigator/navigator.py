@@ -157,14 +157,16 @@ class Navigator(BaseTask):
             with torch.no_grad():
                 self.legged_env_obs, _, _, _ = self.legged_env.step(self.legged_env.policy(self.legged_env_obs))
         
-        self.post_physics_step()
+        env_ids = self.post_physics_step()
+
+        self.dones = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+        self.dones[env_ids] = True
 
         # clip observations
 
         # clip privileged observations
         
-
-        return self.obs_buf, self.privileged_obs_buf, self.rew_buf, self.reset_buf, self.extras
+        return self.obs_buf, self.privileged_obs_buf, self.rew_buf, self.dones, self.extras
 
     def post_physics_step(self):
 
@@ -193,6 +195,8 @@ class Navigator(BaseTask):
         self.last_actions[:] = self.actions[:]
 
         self._render_headless()
+
+        return env_ids
 
 
     def check_termination(self):
@@ -274,9 +278,15 @@ class Navigator(BaseTask):
 
         # self.obs_buf[:] = torch.cat([obs, priv_obs[:, :2], priv_obs[:, 2:3]*0.33, priv_obs[:, 3:4], priv_obs[:, 4:5] * (1/3.14), priv_obs[5:6]], dim=-1)
 
+    def get_privileged_obs(self):
+        return self.privileged_obs_buf
+
+    def get_full_seen_world_obs(self):
+        return self.full_seen_world_obs
+
     def reset(self):
         self.legged_env_obs = self.legged_env.reset()
-        self.world_env_obs = self.world_env.reset()
+        self.world_env_obs, self.full_seen_world_obs = self.world_env.reset()
         return self.obs_buf
     
     def reset_idx(self, env_ids):
