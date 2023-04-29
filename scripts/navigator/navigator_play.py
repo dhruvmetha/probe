@@ -29,7 +29,7 @@ if __name__ == "__main__":
     # params = logger.load_pkl('parameters.pkl')
     Cfg.env.num_envs = 5
 
-    env = Navigator(Cfg, sim_device='cuda:0', headless=True)
+    env = Navigator(Cfg, sim_device='cuda:0', headless=False)
     env = NavigationHistoryWrapper(env)
     
     obs = env.reset()
@@ -37,19 +37,19 @@ if __name__ == "__main__":
     
     num_eval_steps = 5000
 
-    env.start_recording()
+    # env.start_recording()
     record_torques = []
     for i in range(num_eval_steps):
         with torch.inference_mode():
             actions = policy(obs['obs_history'], obs['privileged_obs'])
             obs, _, _, _ = env.step(actions)
-            record_torques.append(env.legged_env.torques[0])
+            # record_torques.append(env.legged_env.torques[0])
         
-        frames = env.get_complete_frames()
-        if len(frames) > 0:
-            print('LOGGING_VIDEO')
-            env.pause_recording()
-            logger.save_video(frames, f"eval_videos/{i:05d}.mp4", fps=1 / (env.dt))
-            logger.save_pkl(record_torques[-len(frames):], path=f'eval_torques/torques_{i}.pkl')
-            record_torques = []
-            env.start_recording()
+        # frames = env.get_complete_frames()
+        # if len(frames) > 0:
+        #     print('LOGGING_VIDEO')
+        #     env.pause_recording()
+        #     logger.save_video(frames, f"eval_videos/{i:05d}.mp4", fps=1 / (env.dt))
+        #     logger.save_pkl(record_torques[-len(frames):], path=f'eval_torques/torques_{i}.pkl')
+        #     record_torques = []
+        #     env.start_recording()

@@ -8,6 +8,7 @@ from ml_logger import logger
 from params_proto import PrefixProto
 
 from .actor_critic import ActorCritic
+from .one_step_model import OneStepModel
 from .rollout_storage import RolloutStorage
 
 from tqdm import tqdm
@@ -75,6 +76,10 @@ class Runner:
                                       self.env.num_actions
                                       ).to(self.device)
 
+        one_step_models = [OneStepModel(128, self.env.num_actions, self.env.num_obs).to(self.device) for i in range(5)]
+
+        # one_step_models = None
+
         if RunnerArgs.resume:
             # load pretrained weights from resume_path
             from ml_logger import ML_Logger
@@ -92,7 +97,7 @@ class Runner:
                     self.env.curricula[gait_id].weights = distribution_last[f"weights_{gait_name}"]
                     print(gait_name)
 
-        self.alg = PPO(actor_critic, device=self.device)
+        self.alg = PPO(actor_critic, one_step_models=one_step_models, device=self.device)
         self.num_steps_per_env = RunnerArgs.num_steps_per_env
 
         # init storage and model
@@ -132,6 +137,7 @@ class Runner:
         lenbuffer_eval = deque(maxlen=100)
         cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+        ep_intrinsic_reward = torch.zeros(self.env.num_train_envs, dtype=torch.float, device=self.device)
 
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in tqdm(range(self.current_learning_iteration, tot_iter)):
@@ -147,6 +153,17 @@ class Runner:
                     #     actions_eval = self.alg.actor_critic.act_student(obs_history[num_train_envs:])
 
                     actions_eval = self.alg.actor_critic.act(obs_history[num_train_envs:], privileged_obs[num_train_envs:])
+                    
+                    intrinsic_reward = 0.
+                    if len(self.alg.one_step_models) > 0:
+                    # compute intrinsic reward
+                        latents = [osm(self.alg.actor_critic.get_latent(obs_history[:num_train_envs], privileged_obs[:num_train_envs]), actions_train) for osm in self.alg.one_step_models]
+                        # print(torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1).shape)
+                        intrinsic_reward_scale = 0.5
+                        intrinsic_reward = torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1)
+                        # print(intrinsic_reward[0])
+                        intrinsic_reward =  torch.clamp(intrinsic_reward, min=0., max=5.) * self.env.dt * intrinsic_reward_scale
+                        ep_intrinsic_reward += intrinsic_reward
 
                     ret = self.env.step(torch.cat((actions_train, actions_eval), dim=0))
                     obs_dict, rewards, dones, infos = ret
@@ -155,9 +172,13 @@ class Runner:
 
                     obs, privileged_obs, obs_history, rewards, dones = obs.to(self.device), privileged_obs.to(
                         self.device), obs_history.to(self.device), rewards.to(self.device), dones.to(self.device)
-                    self.alg.process_env_step(rewards[:num_train_envs], dones[:num_train_envs], infos)
+
+                    rewards[:num_train_envs] += intrinsic_reward
+                    self.alg.process_env_step(obs[:num_train_envs], rewards[:num_train_envs], dones[:num_train_envs], infos)
 
                     if 'train/episode' in infos:
+                        infos['train/episode']['rew_intrinsic'] = torch.mean(ep_intrinsic_reward)
+                        infos['train/episode']['rew_total'] += torch.mean(ep_intrinsic_reward)
                         with logger.Prefix(metrics="train/episode"):
                             logger.store_metrics(**infos['train/episode'])
 
@@ -187,6 +208,11 @@ class Runner:
                     if 'curriculum/distribution' in infos:
                         distribution = infos['curriculum/distribution']
 
+                    
+                    done_env_ids = dones[:num_train_envs].nonzero(as_tuple=False).flatten()
+                    if len(done_env_ids) > 0:
+                        ep_intrinsic_reward[done_env_ids] = 0.
+
                 stop = time.time()
                 collection_time = stop - start
 
@@ -205,7 +231,7 @@ class Runner:
                 #                          "distribution": distribution},
                 #                          path=f"curriculum/distribution.pkl", append=True)
 
-            mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student = self.alg.update()
+            mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student, mean_osm_loss = self.alg.update()
             stop = time.time()
             learn_time = stop - start
 
@@ -220,7 +246,8 @@ class Runner:
                 mean_decoder_loss_student=mean_decoder_loss_student,
                 mean_decoder_test_loss=mean_decoder_test_loss,
                 mean_decoder_test_loss_student=mean_decoder_test_loss_student,
-                mean_adaptation_module_test_loss=mean_adaptation_module_test_loss
+                mean_adaptation_module_test_loss=mean_adaptation_module_test_loss,
+                mean_osm_loss = mean_osm_loss
             )
 
             if RunnerArgs.save_video_interval:
@@ -248,8 +275,8 @@ class Runner:
                     # logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/", once=False)
 
                     body_path = f'{path}/body_latest.jit'
-                    # body_model = copy.deepcopy(torch.nn.Sequential(self.alg.actor_critic.shared_memory, self.alg.actor_critic.actor)).to('cpu')
-                    body_model = copy.deepcopy(self.alg.actor_critic.actor).to('cpu')
+                    body_model = copy.deepcopy(torch.nn.Sequential(self.alg.actor_critic.shared_memory, self.alg.actor_critic.actor)).to('cpu')
+                    # body_model = copy.deepcopy(self.alg.actor_critic.actor).to('cpu')
                     traced_script_body_module = torch.jit.script(body_model)
                     traced_script_body_module.save(body_path)
 

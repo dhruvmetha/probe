@@ -173,9 +173,9 @@ class Navigator(BaseTask):
         #     self.gym.render_all_camera_sensors(self.sim)
 
         self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
-        self.base_quat = self.legged_env.base_quat[:, :]
-        robot_bounding_box = [torch.tensor([-0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([-0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1)]
-        self.robot_bounding_box = [self.legged_env.base_pos[:, :3] +  quat_apply_yaw(self.base_quat, bbox.to(self.device)) for bbox in robot_bounding_box]
+
+        # robot_bounding_box = [torch.tensor([-0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([-0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1)]
+        # self.robot_bounding_box = [self.legged_env.base_pos[:, :3].clone() +  quat_apply_yaw(self.base_quat, bbox.to(self.device)) for bbox in robot_bounding_box]
 
         self.episode_length_buf += 1
 
@@ -244,13 +244,14 @@ class Navigator(BaseTask):
 
     def compute_observations(self):
 
+        self.base_quat = self.legged_env.base_quat[:, :].clone()
         obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
         # setup obs buf and scale it to normalize observations
-        obs = torch.cat([(self.legged_env.base_pos[:, :1] - self.env_origins[:, :1]) * 0.33, (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw * (1/3.14), self.legged_env.base_lin_vel[:, :2] * (1/0.65), self.legged_env.base_ang_vel[:, 2:] * (1/0.65), self.actions], dim = -1)
+        obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1]) * 0.66) - 1.0, (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw * (1/3.14), self.legged_env.base_lin_vel[:, :2] * (1/0.65), self.legged_env.base_ang_vel[:, 2:] * (1/0.65), self.actions.clone()], dim = -1)
         # add scaled noise
 
-        low_level_obs = self.legged_env.actions.clone()
+        # low_level_obs = self.legged_env.actions.clone()
         # low_level_obs = self.legged_env_obs['obs'].clone()
         # print(low_level_obs.shape)
 
@@ -259,6 +260,12 @@ class Navigator(BaseTask):
         self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
         self.privileged_obs_buf[:] = self.world_env_obs.clone()
         priv_obs = self.privileged_obs_buf.clone()
+
+        priv_obs[:, 2:3] = (((priv_obs[:, 2:3]) * 0.66) - 1.0) * ((priv_obs[:, 2:3] != 0) * 1.0)
+        # priv_obs[:, 3:4] = (priv_obs[:, 3:4]) 
+        priv_obs[:, 4:5] = (priv_obs[:, 4:5]) * (1/3.14) * ((priv_obs[:, 4:5] != 0) * 1.0)
+        # priv_obs[:, 5:6] = ((priv_obs[:, 5:6]) * 0.66) - 1.0
+        priv_obs[:, 6] = ((priv_obs[:, 6]) * (2/ 1.7)) - 1.0 * ((priv_obs[:, 6] != 0) * 1.0)
         # add scaled noise
 
         self.obs_buf[:] = torch.cat([obs, priv_obs], dim=-1)

@@ -31,7 +31,7 @@ class PPO_Args(PrefixProto):
 class PPO:
     actor_critic: ActorCritic
 
-    def __init__(self, actor_critic, device='cpu'):
+    def __init__(self, actor_critic, one_step_models=None, device='cpu'):
 
         self.device = device
 
@@ -40,6 +40,11 @@ class PPO:
         self.actor_critic.to(device)
         self.storage = None  # initialized later
         self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=PPO_Args.learning_rate)
+
+        self.one_step_models = []
+        if one_step_models is not None:
+            self.one_step_models = one_step_models
+            self.one_step_optimizers = [optim.Adam(osm.parameters(), lr=1e-3) for osm in one_step_models]
         
         self.transition = RolloutStorage.Transition()
 
@@ -71,7 +76,8 @@ class PPO:
         self.transition.observation_histories = obs_history
         return self.transition.actions
 
-    def process_env_step(self, rewards, dones, infos):
+    def process_env_step(self, next_observations, rewards, dones, infos):
+        self.transition.next_observations = next_observations.clone()
         self.transition.rewards = rewards.clone()
         self.transition.dones = dones
         # self.transition.env_bins = infos["env_bins"]
@@ -99,7 +105,7 @@ class PPO:
         mean_decoder_test_loss = 0
         mean_decoder_test_loss_student = 0
         generator = self.storage.mini_batch_generator(PPO_Args.num_mini_batches, PPO_Args.num_learning_epochs)
-        for obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
+        for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
             old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
 
             _, value_batch = self.actor_critic.act_evaluate(obs_history_batch, privileged_obs_batch, masks=masks_batch)
@@ -159,6 +165,35 @@ class PPO:
             num_train = int(data_size // 5 * 4)
 
 
+        mean_osm_loss = 0.
+        osm_loss_count = 0
+        if len(self.one_step_models) > 0:
+            loss_fn = nn.MSELoss(reduction='mean')
+            
+            for _ in range(1):
+                generator = self.storage.mini_batch_generator(PPO_Args.num_mini_batches, PPO_Args.num_learning_epochs)
+                for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
+                    old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
+
+                    osm_idx = np.random.choice(np.arange(0, len(self.one_step_models)))
+                    osm_model = self.one_step_models[osm_idx]
+                    osm_optimizer = self.one_step_optimizers[osm_idx]
+                    latent = None
+                    with torch.no_grad():
+                        latent = self.actor_critic.get_latent(obs_history_batch, privileged_obs_batch)
+                        latent_next = self.actor_critic.get_latent(torch.cat([obs_history_batch[:, obs_batch.size(1):], next_obs_batch], dim=-1), privileged_obs_batch)
+                        # print(latent_next.shape)
+
+                    osm_model.train()
+                    osm_optimizer.zero_grad()
+                    out = osm_model(latent, actions_batch)
+                    loss = loss_fn(out, latent_next)
+                    loss.backward()
+                    osm_optimizer.step()
+                    mean_osm_loss += loss.item()
+                    osm_loss_count += 1
+        
+        mean_osm_loss /= osm_loss_count
         num_updates = PPO_Args.num_learning_epochs * PPO_Args.num_mini_batches
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates
@@ -170,4 +205,7 @@ class PPO:
         mean_decoder_test_loss_student /= (num_updates * PPO_Args.num_adaptation_module_substeps)
         self.storage.clear()
 
-        return mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student
+
+
+
+        return mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student, mean_osm_loss

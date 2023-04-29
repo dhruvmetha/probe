@@ -44,14 +44,14 @@ class CoRLRewards:
     def _reward_side_limits(self):
         cross = torch.zeros(self.env.robot_bounding_box[0].shape[0], device=self.env.robot_bounding_box[0].device)
         for i in range(4):
-            cross[:] += (torch.abs(self.env.robot_bounding_box[i][:, 1]) > 0.95).long()
+            cross[:] += ((torch.abs(self.env.robot_bounding_box[i][:, 1]) > 0.95) * 1.0)
         # print(cross[0])
         return (cross > 0) * 1.0
 
     def _reward_back_limits(self):
         cross = torch.zeros(self.env.robot_bounding_box[0].shape[0], device=self.env.robot_bounding_box[0].device)
         for i in range(4):
-            cross[:] += (self.env.robot_bounding_box[i][:, 0] < -0.35).long()
+            cross[:] += ((self.env.robot_bounding_box[i][:, 0] < -0.35) * 1.0)
         return (cross > 0) * 1.0
     
 
