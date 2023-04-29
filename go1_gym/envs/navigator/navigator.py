@@ -173,6 +173,7 @@ class Navigator(BaseTask):
         #     self.gym.render_all_camera_sensors(self.sim)
 
         self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
+        self.base_quat = self.legged_env.base_quat[:, :].clone()
 
         # robot_bounding_box = [torch.tensor([-0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([-0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1)]
         # self.robot_bounding_box = [self.legged_env.base_pos[:, :3].clone() +  quat_apply_yaw(self.base_quat, bbox.to(self.device)) for bbox in robot_bounding_box]
@@ -244,7 +245,6 @@ class Navigator(BaseTask):
 
     def compute_observations(self):
 
-        self.base_quat = self.legged_env.base_quat[:, :].clone()
         obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
         # setup obs buf and scale it to normalize observations
