@@ -159,10 +159,10 @@ class Runner:
                     # compute intrinsic reward
                         latents = [osm(self.alg.actor_critic.get_latent(obs_history[:num_train_envs], privileged_obs[:num_train_envs]), actions_train) for osm in self.alg.one_step_models]
                         # print(torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1).shape)
-                        intrinsic_reward_scale = 0.5
+                        intrinsic_reward_scale = 0.01
                         intrinsic_reward = torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1)
                         # print(intrinsic_reward[0])
-                        intrinsic_reward =  torch.clamp(intrinsic_reward, min=0., max=5.) * self.env.dt * intrinsic_reward_scale
+                        intrinsic_reward =  torch.clamp(intrinsic_reward, min=0., max=1.) * self.env.dt * intrinsic_reward_scale
                         ep_intrinsic_reward += intrinsic_reward
 
                     ret = self.env.step(torch.cat((actions_train, actions_eval), dim=0))
