@@ -154,19 +154,25 @@ class Runner:
 
                     actions_eval = self.alg.actor_critic.act(obs_history[num_train_envs:], privileged_obs[num_train_envs:])
                     
+                    
                     intrinsic_reward = 0.
                     if len(self.alg.one_step_models) > 0:
                     # compute intrinsic reward
                         latents = [osm(self.alg.actor_critic.get_latent(obs_history[:num_train_envs], privileged_obs[:num_train_envs]), actions_train) for osm in self.alg.one_step_models]
                         # print(torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1).shape)
-                        intrinsic_reward_scale = 0.01
+                        intrinsic_reward_scale = 0.01 * self.env.dt
                         intrinsic_reward = torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1)
                         # print(intrinsic_reward[0])
-                        intrinsic_reward =  torch.clamp(intrinsic_reward, min=0., max=1.) * self.env.dt * intrinsic_reward_scale
-                        ep_intrinsic_reward += intrinsic_reward
+                        intrinsic_reward =  torch.clamp(intrinsic_reward, min=0., max=1.) * intrinsic_reward_scale
+                        if 'intrinsic' not in self.env.episode_sums:
+                            self.env.episode_sums['intrinsic'] = 0.
+                        self.env.episode_sums['intrinsic'] += intrinsic_reward
+
 
                     ret = self.env.step(torch.cat((actions_train, actions_eval), dim=0))
                     obs_dict, rewards, dones, infos = ret
+                    
+
                     obs, privileged_obs, obs_history = obs_dict["obs"], obs_dict["privileged_obs"], obs_dict[
                         "obs_history"]
 
@@ -177,8 +183,6 @@ class Runner:
                     self.alg.process_env_step(obs[:num_train_envs], rewards[:num_train_envs], dones[:num_train_envs], infos)
 
                     if 'train/episode' in infos:
-                        infos['train/episode']['rew_intrinsic'] = torch.mean(ep_intrinsic_reward)
-                        infos['train/episode']['rew_total'] += torch.mean(ep_intrinsic_reward)
                         with logger.Prefix(metrics="train/episode"):
                             logger.store_metrics(**infos['train/episode'])
 

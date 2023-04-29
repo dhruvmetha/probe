@@ -303,6 +303,8 @@ class Navigator(BaseTask):
         if len(eval_env_ids) > 0:
             self.extras["eval/episode"] = {}
             for key in self.episode_sums.keys():
+                if key == 'instrinsic':
+                    continue
                 # save the evaluation rollout result if not already saved
                 unset_eval_envs = eval_env_ids[self.episode_sums_eval[key][eval_env_ids] == -1]
                 self.episode_sums_eval[key][unset_eval_envs] = self.episode_sums[key][unset_eval_envs]
