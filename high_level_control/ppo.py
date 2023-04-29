@@ -190,8 +190,12 @@ class PPO:
                 osm_optimizer.step()
                 mean_osm_loss += loss.item()
                 osm_loss_count += 1
-    
-        mean_osm_loss /= osm_loss_count
+
+        try:
+            mean_osm_loss /= osm_loss_count
+        except ZeroDivisionError:
+            mean_osm_loss = 0.
+            
         num_updates = PPO_Args.num_learning_epochs * PPO_Args.num_mini_batches
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates

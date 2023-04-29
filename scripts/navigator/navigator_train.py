@@ -15,7 +15,7 @@ if __name__ == "__main__":
                      root=Path(f"{MINI_GYM_ROOT_DIR}/runs").resolve(), )
 
 
-    env = Navigator(Cfg, sim_device='cuda:0', headless= True)
+    env = Navigator(Cfg, sim_device='cuda:0', headless=True)
     env = NavigationHistoryWrapper(env)
 
     env.reset()

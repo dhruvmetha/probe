@@ -76,9 +76,8 @@ class Runner:
                                       self.env.num_actions
                                       ).to(self.device)
 
-        one_step_models = [OneStepModel(128, self.env.num_actions, self.env.num_obs).to(self.device) for i in range(5)]
-
-        # one_step_models = None
+        # one_step_models = [OneStepModel(128, self.env.num_actions, self.env.num_obs).to(self.device) for i in range(5)]
+        one_step_models = None
 
         if RunnerArgs.resume:
             # load pretrained weights from resume_path

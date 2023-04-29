@@ -261,13 +261,15 @@ class Navigator(BaseTask):
         self.privileged_obs_buf[:] = self.world_env_obs.clone()
         priv_obs = self.privileged_obs_buf.clone()
 
-        priv_obs[:, 2:3] = (((priv_obs[:, 2:3]) * 0.66) - 1.0) * ((priv_obs[:, 2:3] != 0) * 1.0)
-        # priv_obs[:, 3:4] = (priv_obs[:, 3:4]) 
-        priv_obs[:, 4:5] = (priv_obs[:, 4:5]) * (1/3.14) * ((priv_obs[:, 4:5] != 0) * 1.0)
-        # priv_obs[:, 5:6] = ((priv_obs[:, 5:6]) * 0.66) - 1.0
-        priv_obs[:, 6] = ((priv_obs[:, 6]) * (2/ 1.7)) - 1.0 * ((priv_obs[:, 6] != 0) * 1.0)
+        for r in range(3):
+            k = r * 7
+            priv_obs[:, k+2] = ((priv_obs[:, k+2]) * 0.66) - (1.0 * (torch.sum(priv_obs[:, k:k+7], dim=-1) > 0.))
+            # priv_obs[:, 3:4] = (priv_obs[:, 3:4]) 
+            priv_obs[:, k+4] = (priv_obs[:, k+4]) * (1/3.14) # * ((priv_obs[:, k+4] != 0.0) * 1.0)
+            # priv_obs[:, 5:6] = ((priv_obs[:, 5:6]) * 0.66) - 1.0
+            priv_obs[:, k+6] = ((priv_obs[:, k+6]) * (2/ 1.7)) - (1.0 * (torch.sum(priv_obs[:, k:k+7], dim=-1) > 0.))
         # add scaled noise
-
+        
         self.obs_buf[:] = torch.cat([obs, priv_obs], dim=-1)
 
         # self.obs_buf[:] = torch.cat([obs, priv_obs[:, :2], priv_obs[:, 2:3]*0.33, priv_obs[:, 3:4], priv_obs[:, 4:5] * (1/3.14), priv_obs[5:6]], dim=-1)

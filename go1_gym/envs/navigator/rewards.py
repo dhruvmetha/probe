@@ -31,6 +31,9 @@ class CoRLRewards:
         # return torch.sum(torch.square(self.env.actions), dim=-1)
         # return torch.sum(torch.square(self.env.actions), dim=-1)
 
+    def _reward_time(self):
+        return torch.ones(self.env.num_envs, device=self.env.device) * -1.0
+
     def _reward_action_rate(self):
         return torch.sum(torch.square(self.env.last_actions - self.env.actions), dim=1)
 
