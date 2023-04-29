@@ -53,7 +53,8 @@ if __name__ == "__main__":
     logger.configure(Path(model_path).resolve())
 
     # params = logger.load_pkl('parameters.pkl')
-    Cfg.env.num_envs = 5
+    num_envs = 5
+    Cfg.env.num_envs = num_envs
 
     env = Navigator(Cfg, sim_device='cuda:0', headless=True)
     env = NavigationHistoryWrapper(env)
@@ -63,9 +64,26 @@ if __name__ == "__main__":
     
     num_eval_steps = 5000
 
+    low_level_obs = env.legged_env.get_observations()['obs'].clone()
+
+    # create buffers for data collection
+    obs_data = torch.zeros(num_envs, obs['obs'].shape[1], device=env.device)
+    obs_data = torch.zeros(num_envs, obs['obs'].shape[1], device=env.device)
+
+
     for i in range(num_eval_steps):
         with torch.inference_mode():
             actions = policy(obs['obs_history'], obs['privileged_obs'])
             obs, rewards, dones, info = env.step(actions)
+            # collect data from high level observations, process and low level observations
+            obs['obs']
+
+            if len(dones.nonzero(as_tuple=False).flatten()) > 0:
+                # randomly pick a queue to send data to
+                queue = np.random.choice([queue_1, queue_2])
+
+                # send data to queue
+                
+
             
-            # env_dones = dones.nonzero().flatten
+            
