@@ -17,10 +17,13 @@ from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 from go1_gym.envs.go1.velocity_tracking import VelocityTrackingEasyEnv
 from go1_gym.utils.math_utils import quat_apply_yaw
 
+from scene_predictor.model import MiniTransformer
+
 
 
 class Navigator(BaseTask):
-    def __init__(self, cfg: Cfg, sim_device, headless, num_envs=None, eval_cfg:Cfg=None, physics_engine="SIM_PHYSX", initial_dynamics_dict=None):
+    def __init__(self, cfg: Cfg, sim_device, headless, num_envs=None, eval_cfg:Cfg=None, physics_engine="SIM_PHYSX", initial_dynamics_dict=None, use_scene_model=True, scene_model_ckpt='scene_predictor/results/model_2.pt'):
+        self.use_scene_model = use_scene_model 
         self.cfg = cfg
         self.eval_cfg = eval_cfg
 
@@ -60,7 +63,8 @@ class Navigator(BaseTask):
         self.record_eval_now = False
 
         self._prepare_reward_function()
-
+        if self.use_scene_model:
+            self.load_scene_model(self.device, scene_model_ckpt)
 
     def _pre_create_env(self):
 
@@ -117,6 +121,10 @@ class Navigator(BaseTask):
 
         self.base_pos = torch.zeros(self.num_envs, 2, device=self.device, dtype=torch.float32)
 
+        self.legged_obs_history = torch.zeros((self.num_envs, 500, self.legged_env.obs_buf.shape[-1]), device=self.device)
+        self.env_idx = torch.arange(self.num_envs, dtype=torch.long, device=self.device).unsqueeze(-1)
+        self.env_step = torch.zeros((self.num_envs, 1), dtype=torch.long, device=self.device).view(-1, 1)
+
     def set_camera(self, position, lookat):
         """ Set camera position and direction
         """
@@ -146,7 +154,7 @@ class Navigator(BaseTask):
         
         self.render_gui()
 
-        self.actions[:, :3] = torch.clamp(actions[:, :3], -0.65, 0.65)
+        self.actions[:, :3] = torch.clamp(actions[:, :3], -0.5, 0.5)
 
         # print(torch.sum(torch.square(self.actions[0])))
 
@@ -177,8 +185,8 @@ class Navigator(BaseTask):
         self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
         self.base_quat = self.legged_env.base_quat[:, :].clone()
 
-        # robot_bounding_box = [torch.tensor([-0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([-0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1)]
-        # self.robot_bounding_box = [self.legged_env.base_pos[:, :3].clone() +  quat_apply_yaw(self.base_quat, bbox.to(self.device)) for bbox in robot_bounding_box]
+        robot_bounding_box = [torch.tensor([-0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([-0.3, 0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1), torch.tensor([0.3, -0.15, 0]).repeat(self.num_envs).view(self.num_envs, -1)]
+        self.robot_bounding_box = [self.legged_env.base_pos[:, :3].clone() +  quat_apply_yaw(self.base_quat, bbox.to(self.device)) for bbox in robot_bounding_box]
 
         self.episode_length_buf += 1
 
@@ -249,31 +257,44 @@ class Navigator(BaseTask):
 
     def compute_observations(self):
 
-        obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
-        # setup obs buf and scale it to normalize observations
-        obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1]) * 0.66) - 1.0, (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw * (1/3.14), self.legged_env.base_lin_vel[:, :2] * (1/0.65), self.legged_env.base_ang_vel[:, 2:] * (1/0.65), self.actions.clone()], dim = -1)
-        # add scaled noise
+        if not self.use_scene_model:
+            obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
-        # low_level_obs = self.legged_env.actions.clone()
-        # low_level_obs = self.legged_env_obs['obs'].clone()
-        # print(low_level_obs.shape)
+            # setup obs buf and scale it to normalize observations
+            obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1]) * 0.66) - 1.0, (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw * (1/3.14), self.legged_env.base_lin_vel[:, :2] * (1/0.65), self.legged_env.base_ang_vel[:, 2:] * (1/0.65), self.actions.clone()], dim = -1)
+            # add scaled noise
+
+            # low_level_obs = self.legged_env.actions.clone()
+            # low_level_obs = self.legged_env_obs['obs'].clone()
+            # print(low_level_obs.shape)
 
 
-        # setup privileged obs buf and scale it to normalize observations
-        self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
-        self.privileged_obs_buf[:] = self.world_env_obs.clone()
-        priv_obs = self.privileged_obs_buf.clone()
+            # setup privileged obs buf and scale it to normalize observations
+            self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
+            self.privileged_obs_buf[:] = self.world_env_obs.clone()
+            priv_obs = self.privileged_obs_buf.clone()
+
+        else:
+
+            input_obs = self.legged_env.get_observations()['obs'].clone()
+            self.legged_obs_history[self.env_idx, self.env_step, :] = input_obs
+            self.env_step += 1
+
+            model_obs = self.get_inferred_obs()
+            obs = torch.cat([((model_obs[:, :1]) * 0.66) - 1.0, (model_obs[:, 1:2]), model_obs[:, 2:3] * (1/3.14), model_obs[:, 3:5] * (1/0.65), model_obs[:, 5:6] * (1/0.65), self.actions.clone()], dim = -1)
+            
+            priv_obs = model_obs[:, 6:].clone()
 
         for r in range(3):
-            k = r * 7
+            k = r * 7 + 6
             priv_obs[:, k+2] = ((priv_obs[:, k+2]) * 0.66) - (1.0 * (torch.sum(priv_obs[:, k:k+7], dim=-1) > 0.))
             # priv_obs[:, 3:4] = (priv_obs[:, 3:4]) 
             priv_obs[:, k+4] = (priv_obs[:, k+4]) * (1/3.14) # * ((priv_obs[:, k+4] != 0.0) * 1.0)
             # priv_obs[:, 5:6] = ((priv_obs[:, 5:6]) * 0.66) - 1.0
             priv_obs[:, k+6] = ((priv_obs[:, k+6]) * (2/ 1.7)) - (1.0 * (torch.sum(priv_obs[:, k:k+7], dim=-1) > 0.))
-        # add scaled noise
         
+        # add scaled noise
         self.obs_buf[:] = torch.cat([obs, priv_obs], dim=-1)
 
         # self.obs_buf[:] = torch.cat([obs, priv_obs[:, :2], priv_obs[:, 2:3]*0.33, priv_obs[:, 3:4], priv_obs[:, 4:5] * (1/3.14), priv_obs[5:6]], dim=-1)
@@ -289,6 +310,22 @@ class Navigator(BaseTask):
         self.world_env_obs, self.full_seen_world_obs = self.world_env.reset()
         return self.obs_buf
     
+    def load_scene_model(self, device, ckpt_path):
+        sequence_length = 500
+        hidden_state_size = 2048
+        num_heads = 8
+        num_layers = 8
+        input_size = 70
+        output_size = 27
+        self.model = MiniTransformer(input_size=input_size, output_size=output_size, embed_size=128, hidden_size=hidden_state_size, num_heads=num_heads, max_sequence_length=sequence_length, num_layers=num_layers)
+        self.model.load_state_dict(torch.load(ckpt_path))
+        self.model = self.modelmodel.to(device)
+        self.model.eval()
+
+    def get_inferred_obs(self):
+        with torch.inference_mode():
+            return self.model(self.legged_obs_history.clone())
+
     def reset_idx(self, env_ids):
 
         if len(env_ids) == 0:
@@ -300,6 +337,8 @@ class Navigator(BaseTask):
         self.gs_buf[env_ids] = False
         self.episode_length_buf[env_ids] = 0
         self.last_actions[env_ids] = 0.
+        self.legged_obs_history[env_ids, :, :] = 0.0
+        self.env_step[env_ids] = 0
         
         self.reset_video_camera(env_ids)
 
@@ -333,6 +372,7 @@ class Navigator(BaseTask):
         max_episode_length_s = cfg.env.episode_length_s
         cfg.env.max_episode_length = np.ceil(max_episode_length_s / self.dt)
         self.max_episode_length = cfg.env.max_episode_length
+        self.max_episode_length = 500
 
         # cfg.domain_rand.push_interval = np.ceil(cfg.domain_rand.push_interval_s / self.dt)
         # cfg.domain_rand.rand_interval = np.ceil(cfg.domain_rand.rand_interval_s / self.dt)

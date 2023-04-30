@@ -1083,12 +1083,20 @@ class LeggedRobot():
         """ Random pushes the robots. Emulates an impulse by setting a randomized base velocity.
         """
         if cfg.domain_rand.push_robots:
+
+
             env_ids = env_ids[self.episode_length_buf[env_ids] % int(cfg.domain_rand.push_interval) == 0]
+            
+            go1_ids_int32 = torch.tensor([self.gym.find_actor_index(self.envs[i.item()], 'go1', gymapi.DOMAIN_SIM) for i in env_ids], dtype=torch.long, device=self.device)
+            
+
+            self.all_root_states[go1_ids_int32] = self.base_init_state
+            self.all_root_states[go1_ids_int32, :3] += self.env_origins[env_ids]
 
             max_vel = cfg.domain_rand.max_push_vel_xy
-            self.root_states[env_ids, 7:9] = torch_rand_float(-max_vel, max_vel, (len(env_ids), 2),
+            self.all_root_states[go1_ids_int32, 7:9] = torch_rand_float(-max_vel, max_vel, (len(env_ids), 2),
                                                               device=self.device)  # lin vel x/y
-            self.gym.set_actor_root_state_tensor(self.sim, gymtorch.unwrap_tensor(self.root_states))
+            self.gym.set_actor_root_state_tensor_indexed(self.sim, gymtorch.unwrap_tensor(self.all_root_states), gymtorch.unwrap_tensor(go1_ids_int32.to(dtype=torch.int32)), len(go1_ids_int32))
 
     def _teleport_robots(self, env_ids, cfg):
         """ Teleports any robots that are too close to the edge to the other side
@@ -1097,7 +1105,8 @@ class LeggedRobot():
             thresh = cfg.terrain.teleport_thresh
 
             x_offset = int(cfg.terrain.x_offset * cfg.terrain.horizontal_scale)
-
+            
+            
             low_x_ids = env_ids[self.root_states[env_ids, 0] < thresh + x_offset]
             self.root_states[low_x_ids, 0] += cfg.terrain.terrain_length * (cfg.terrain.num_rows - 1)
 
@@ -1111,6 +1120,8 @@ class LeggedRobot():
             high_y_ids = env_ids[
                 self.root_states[env_ids, 1] > cfg.terrain.terrain_width * cfg.terrain.num_cols - thresh]
             self.root_states[high_y_ids, 1] -= cfg.terrain.terrain_width * (cfg.terrain.num_cols - 1)
+
+
 
             self.gym.set_actor_root_state_tensor(self.sim, gymtorch.unwrap_tensor(self.root_states))
             self.gym.refresh_actor_root_state_tensor(self.sim)
@@ -1127,6 +1138,7 @@ class LeggedRobot():
         """
         # noise_vec = torch.zeros_like(self.obs_buf[0])
         self.add_noise = self.cfg.noise.add_noise
+        print('noise', self.add_noise)
         noise_scales = self.cfg.noise_scales
         noise_level = self.cfg.noise.noise_level
         noise_vec = torch.cat((torch.ones(3) * noise_scales.gravity * noise_level,
@@ -1948,6 +1960,7 @@ class LeggedRobot():
         self.cfg.domain_rand.randomize_Kp_factor = False
         self.cfg.domain_rand.randomize_joint_friction = False
         self.cfg.domain_rand.randomize_com_displacement = False
+        
 
         # self.cfg.env.num_recording_envs = 1
         self.cfg.env.num_envs = self.num_envs

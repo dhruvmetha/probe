@@ -32,7 +32,7 @@ class CoRLRewards:
         # return torch.sum(torch.square(self.env.actions), dim=-1)
 
     def _reward_time(self):
-        return torch.ones(self.env.num_envs, device=self.env.device) * -1.0
+        return torch.ones(self.env.num_envs, device=self.env.device)
 
     def _reward_action_rate(self):
         return torch.sum(torch.square(self.env.last_actions - self.env.actions), dim=1)
@@ -48,7 +48,6 @@ class CoRLRewards:
         cross = torch.zeros(self.env.robot_bounding_box[0].shape[0], device=self.env.robot_bounding_box[0].device)
         for i in range(4):
             cross[:] += ((torch.abs(self.env.robot_bounding_box[i][:, 1]) > 0.95) * 1.0)
-        # print(cross[0])
         return (cross > 0) * 1.0
 
     def _reward_back_limits(self):
