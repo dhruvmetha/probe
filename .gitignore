@@ -70,3 +70,8 @@ tmp
 *.tar
 
 dhruv/
+data_ctr.pkl
+data_ctr_1.pkl
+scene_predictor/balanced_data.pkl
+scene_predictor/balanced_data_1.pkl
+scene_predictor/results

@@ -14,7 +14,7 @@ from tqdm import tqdm
 import multiprocessing as mp
 from datetime import datetime
 
-SAVE_FILE_NAME = 'new_round_1'
+SAVE_FILE_NAME = 'multi_policy_1'
 
 def worker(q, q_idx):
     data_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/{SAVE_FILE_NAME}/{q_idx}')
@@ -33,7 +33,11 @@ def worker(q, q_idx):
 
 def load_policy(env):
     actor_critic = ActorCritic(env.num_obs, env.num_privileged_obs, env.num_obs_history, env.num_actions)
-    weights = logger.load_torch("checkpoints/ac_weights_last.pt")
+    model_ckpts = logger.glob('checkpoints/ac_weights_00*500.pt')
+    random_idx = np.random.randint(0, len(model_ckpts))
+    model_ckpt = model_ckpts[random_idx]
+    print(model_ckpt)
+    weights = logger.load_torch(model_ckpt)
     actor_critic.load_state_dict(state_dict=weights)
     actor_critic.to(env.device)
     actor_critic.eval()
@@ -59,24 +63,26 @@ def collect_data(env):
 
 if __name__ == "__main__":
 
+    save = True
 
-    num_workers = 4
-    q_s = [mp.JoinableQueue(maxsize=500) for _ in range(num_workers)]
-    workers = [mp.Process(target=worker, args=(q, idx)) for idx, q in enumerate(q_s)]
-    for worker in workers:
-        worker.daemon = True
-        worker.start()
+    if save:
+        num_workers = 24
+        q_s = [mp.JoinableQueue(maxsize=500) for _ in range(num_workers)]
+        workers = [mp.Process(target=worker, args=(q, idx)) for idx, q in enumerate(q_s)]
+        for worker in workers:
+            worker.daemon = True
+            worker.start()
     
     recent_runs = sorted(glob.glob(f"{MINI_GYM_ROOT_DIR}/runs/high_level_policy/*/*/*"), key=os.path.getmtime)
     model_path = recent_runs[-1]
-    model_path = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-04-29/navigator_train/062711.386694'
+    model_path = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-04-29/navigator_train/074651.388323'
     logger.configure(Path(model_path).resolve())
 
     # params = logger.load_pkl('parameters.pkl')
-    num_envs = 5
+    num_envs = 4096
     Cfg.env.num_envs = num_envs
 
-    env = Navigator(Cfg, sim_device='cuda:0', headless=False)
+    env = Navigator(Cfg, sim_device='cuda:0', headless=True)
     env = NavigationHistoryWrapper(env)
     
     obs = env.reset()
@@ -97,70 +103,78 @@ if __name__ == "__main__":
     env_idx = torch.arange(env.num_envs, dtype=torch.long, device=env.device).unsqueeze(-1)
     env_step = torch.zeros((env.num_envs, 1), dtype=torch.long, device=env.device).view(-1, 1)
     pbar = tqdm(total=1000000)
+    traj_ctr = 0
     for i in range(num_eval_steps):
         with torch.inference_mode():
-            
-            input_obs, target_obs, fsw_obs = collect_data(env)
-            actions_ = actions.clone().unsqueeze(1)
-            dones_data = dones.clone()
+            if save:
+                input_obs, target_obs, fsw_obs = collect_data(env)
+                actions_ = actions.clone().unsqueeze(1)
+                dones_data = dones.clone()
 
-            input_data[env_idx, env_step, :] = input_obs.unsqueeze(1)
-            target_data[env_idx, env_step, :] = target_obs.unsqueeze(1)
-            fsw_data[env_idx, env_step, :] = fsw_obs.unsqueeze(1)
-            actions_data[env_idx, env_step, :] = actions_
-            done_data[env_idx, env_step] = ~(dones_data.view(-1, 1))
+                input_data[env_idx, env_step, :] = input_obs.unsqueeze(1)
+                target_data[env_idx, env_step, :] = target_obs.unsqueeze(1)
+                fsw_data[env_idx, env_step, :] = fsw_obs.unsqueeze(1)
+                actions_data[env_idx, env_step, :] = actions_
+                done_data[env_idx, env_step] = ~(dones_data.view(-1, 1))
 
-            env_step += 1
-            
-            done_envs = (dones*1.0).nonzero().view(-1)
-            if done_envs.size(0) > 0:
-                print('here')
-                q_id = np.random.randint(0, num_workers)
-                q_s[q_id].put({
-                    'input': input_data[done_envs].clone().cpu(),
-                    'actions': actions_data[done_envs].clone().cpu(),
-                    'target': target_data[done_envs].clone().cpu(),
-                    'fsw': fsw_data[done_envs].clone().cpu(),
-                    'done': done_data[done_envs].clone().cpu(),
-                    })
-                env_step[done_envs] = 0
-                input_data[done_envs, :, :] = 0.0
-                actions_data[done_envs, :, :] = 0.0
-                target_data[done_envs, :, :] = 0.0
-                fsw_data[done_envs, :, :] = 0.0
-                done_data[done_envs, :] = False
-                pbar.update(done_envs.size(0))
+                env_step += 1
+                
+                done_envs = (dones).nonzero().view(-1)
+                if done_envs.size(0) > 0:
+                    q_id = np.random.randint(0, num_workers)
+                    q_s[q_id].put({
+                        'input': input_data[done_envs].clone().cpu(),
+                        'actions': actions_data[done_envs].clone().cpu(),
+                        'target': target_data[done_envs].clone().cpu(),
+                        'fsw': fsw_data[done_envs].clone().cpu(),
+                        'done': done_data[done_envs].clone().cpu(),
+                        })
+                    env_step[done_envs] = 0
+                    input_data[done_envs, :, :] = 0.0
+                    actions_data[done_envs, :, :] = 0.0
+                    target_data[done_envs, :, :] = 0.0
+                    fsw_data[done_envs, :, :] = 0.0
+                    done_data[done_envs, :] = False
+                    pbar.update(1)
+                    traj_ctr += done_envs.size(0)
+                    print(traj_ctr/pbar.n)
 
-            done_env_horizon = (env_step == 625).nonzero()[:, 0].view(-1)
-            if done_env_horizon.size(0) > 0:
-                q_id = np.random.randint(0, num_workers)
-                q_s[q_id].put({
-                    'input': input_data[done_env_horizon].clone().cpu(),
-                    'actions': actions_data[done_env_horizon].clone().cpu(),
-                    'target': target_data[done_env_horizon].clone().cpu(),
-                    'fsw': fsw_data[done_env_horizon].clone().cpu(),
-                    'done': done_data[done_env_horizon].clone().cpu(),
-                    })
-                env_step[done_env_horizon] = 0
-                input_data[done_env_horizon, :, :] = 0.0
-                actions_data[done_env_horizon, :, :] = 0.0
-                target_data[done_env_horizon, :, :] = 0.0
-                fsw_data[done_env_horizon, :, :] = 0.0
-                done_data[done_env_horizon, :] = False
-                pbar.update(done_env_horizon.size(0))
-                # env.reset(done_env_horizon)
+                done_env_horizon = (env_step == 625).nonzero()[:, 0].view(-1)
+                if done_env_horizon.size(0) > 0:
+                    q_id = np.random.randint(0, num_workers)
+                    q_s[q_id].put({
+                        'input': input_data[done_env_horizon].clone().cpu(),
+                        'actions': actions_data[done_env_horizon].clone().cpu(),
+                        'target': target_data[done_env_horizon].clone().cpu(),
+                        'fsw': fsw_data[done_env_horizon].clone().cpu(),
+                        'done': done_data[done_env_horizon].clone().cpu(),
+                        })
+                    env_step[done_env_horizon] = 0
+                    input_data[done_env_horizon, :, :] = 0.0
+                    actions_data[done_env_horizon, :, :] = 0.0
+                    target_data[done_env_horizon, :, :] = 0.0
+                    fsw_data[done_env_horizon, :, :] = 0.0
+                    done_data[done_env_horizon, :] = False
+                    pbar.update(1)
+                    # env.reset(done_env_horizon)
+                    traj_ctr += done_env_horizon.size(0)
+                    print(traj_ctr/pbar.n)
 
             actions = policy(obs['obs_history'], obs['privileged_obs'])
             obs, rewards, dones, info = env.step(actions)
-            print(dones[0])
+
+            if (i+1)%250 == 0:
+                policy = load_policy(env)
+            # print(dones[0])
             # collect data from high level observations, process and low level observations
             # input_obs, target_obs, fsw_obs = collect_data(env)
+    
+    if save:
+        for q in q_s:
+            q.join()
 
-    for q in q_s:
-        q.join()
+        for q in q_s:
+            q.put(None)
 
-    for q in q_s:
-        q.put(None)
-
-    for worker in workers:
-        worker.join()
+        for worker in workers:
+            worker.join()

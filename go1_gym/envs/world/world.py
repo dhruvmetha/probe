@@ -117,7 +117,7 @@ class WorldAsset():
         self.world_sampling_dist = torch.zeros(self.world_types, device=self.device, dtype=torch.float, requires_grad=False) + 1/self.world_types
 
         self.base_assets = []
-        if True:
+        if False:
             asset_options = gymapi.AssetOptions()
             asset_options.disable_gravity = False
             asset_options.fix_base_link = True
@@ -170,7 +170,7 @@ class WorldAsset():
 
                 sizes = [j() for j in i['size'][idx]]
                 volume = np.prod(sizes)
-                mass = np.random.uniform(0.8, 2.5)
+                mass = np.random.uniform(0.8, 1.0)
                 density = mass/volume
 
                 if 'fixed' in name:
