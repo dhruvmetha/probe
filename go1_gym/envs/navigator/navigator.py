@@ -1,6 +1,9 @@
 from isaacgym import gymutil, gymapi
 import torch
 import numpy as np
+import multiprocessing as mp
+from pathlib import Path
+from datetime import datetime
 
 
 from go1_gym.envs.base.base_task import BaseTask
@@ -22,10 +25,11 @@ from scene_predictor.model import MiniTransformer
 
 
 class Navigator(BaseTask):
-    def __init__(self, cfg: Cfg, sim_device, headless, num_envs=None, eval_cfg:Cfg=None, physics_engine="SIM_PHYSX", initial_dynamics_dict=None, use_scene_model=True, scene_model_ckpt='scene_predictor/results/model_2.pt'):
+    def __init__(self, cfg: Cfg, sim_device, headless, num_envs=None, eval_cfg:Cfg=None, physics_engine="SIM_PHYSX", initial_dynamics_dict=None, save_data=True, use_scene_model=False, scene_model_ckpt='/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_500_2048/2023-04-30_03-56-22/checkpoints/model_3.pt'):
         self.use_scene_model = use_scene_model 
         self.cfg = cfg
         self.eval_cfg = eval_cfg
+        self.save_data = save_data
 
         if num_envs is not None:
             cfg.env.num_envs = num_envs
@@ -35,6 +39,14 @@ class Navigator(BaseTask):
 
         self.num_train_envs = max(1, int(self.num_envs * self.train_test_split))
         self.num_eval_envs = self.num_envs - self.num_train_envs
+
+        if self.save_data:
+            num_workers = 12
+            self.q_s = [mp.JoinableQueue(maxsize=500) for _ in range(num_workers)]
+            self.workers = [mp.Process(target=self.worker, args=(q, idx)) for idx, q in enumerate(self.q_s)]
+            for worker in self.workers:
+                worker.daemon = True
+                worker.start()
 
         sim_params = gymapi.SimParams()
         gymutil.parse_sim_config(vars(cfg.sim), sim_params)
@@ -121,9 +133,41 @@ class Navigator(BaseTask):
 
         self.base_pos = torch.zeros(self.num_envs, 2, device=self.device, dtype=torch.float32)
 
-        self.legged_obs_history = torch.zeros((self.num_envs, 500, self.legged_env.obs_buf.shape[-1]), device=self.device)
-        self.env_idx = torch.arange(self.num_envs, dtype=torch.long, device=self.device).unsqueeze(-1)
-        self.env_step = torch.zeros((self.num_envs, 1), dtype=torch.long, device=self.device).view(-1, 1)
+        self.dones = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+
+        if self.use_scene_model:
+            self.legged_obs_history = torch.zeros((self.num_envs, 500, self.legged_env.obs_buf.shape[-1]), device=self.device)
+            self.env_idx = torch.arange(self.num_envs, dtype=torch.long, device=self.device).unsqueeze(-1)
+            self.env_step = torch.zeros((self.num_envs, 1), dtype=torch.long, device=self.device).view(-1, 1)
+            # self.src_mask = torch.triu(torch.ones(500, 500) * float('-inf'), diagonal=1).to(self.device)
+
+
+        if self.save_data:
+            self.env_step = torch.zeros((self.num_envs, 1), dtype=torch.long, device=self.device).view(-1, 1)
+            self.env_idx = torch.arange(self.num_envs, dtype=torch.long, device=self.device).unsqueeze(-1)
+
+            self.input_data = torch.zeros((self.num_envs, 500, 70), device=self.device)
+            self.actions_data = torch.zeros((self.num_envs, 500, 3), device=self.device)
+            self.target_data = torch.zeros((self.num_envs, 500, 27), device=self.device)
+            self.fsw_data = torch.zeros((self.num_envs, 500, 21), device=self.device)
+            self.done_data = torch.zeros((self.num_envs, 500), dtype=torch.bool, device=self.device)
+
+    def worker(self, q, q_idx):
+
+        SAVE_FILE_NAME = 'multi_policy_2'
+        data_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/{SAVE_FILE_NAME}/{q_idx}')
+        data_path.mkdir(parents=True, exist_ok=True)
+        
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            # save the data
+            for k, v in item.items():
+                if isinstance(item[k], torch.Tensor):
+                    item[k] = item[k].numpy()
+            np.savez_compressed(data_path/f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.npz', **item)
+            q.task_done()
 
     def set_camera(self, position, lookat):
         """ Set camera position and direction
@@ -151,6 +195,9 @@ class Navigator(BaseTask):
         self.setup_video_camera()
     
     def step(self, actions):
+
+        if self.save_data:
+            self.data_collector()
         
         self.render_gui()
 
@@ -193,6 +240,11 @@ class Navigator(BaseTask):
         self.check_termination()
         self.compute_reward()
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
+
+
+        if len(env_ids) > 0 and self.save_data:
+            self.call_worker(env_ids)
+
         self.reset_idx(env_ids)
         self.compute_observations()
 
@@ -206,6 +258,23 @@ class Navigator(BaseTask):
 
         return env_ids
 
+
+    def call_worker(self, env_ids):
+        q_idx = np.random.randint(0, len(self.q_s))
+        self.q_s[q_idx].put({ 
+            'input': self.input_data[env_ids].clone().cpu(),
+            'actions': self.actions_data[env_ids].clone().cpu(),
+            'target': self.target_data[env_ids].clone().cpu(),
+            'fsw': self.fsw_data[env_ids].clone().cpu(),
+            'done': self.done_data[env_ids].clone().cpu(),
+        })
+
+        self.env_step[env_ids] = 0
+        self.input_data[env_ids, :, :] = 0.0
+        self.actions_data[env_ids, :, :] = 0.0
+        self.target_data[env_ids, :, :] = 0.0
+        self.fsw_data[env_ids, :, :] = 0.0
+        self.done_data[env_ids, :] = False
 
     def check_termination(self):
         self.time_out_buf = self.episode_length_buf >= self.max_episode_length
@@ -278,24 +347,27 @@ class Navigator(BaseTask):
         else:
 
             input_obs = self.legged_env.get_observations()['obs'].clone()
-            self.legged_obs_history[self.env_idx, self.env_step, :] = input_obs
-            self.env_step += 1
+            self.legged_obs_history[self.env_idx, self.env_step, :] = input_obs.unsqueeze(1)
+            
 
-            model_obs = self.get_inferred_obs()
-            obs = torch.cat([((model_obs[:, :1]) * 0.66) - 1.0, (model_obs[:, 1:2]), model_obs[:, 2:3] * (1/3.14), model_obs[:, 3:5] * (1/0.65), model_obs[:, 5:6] * (1/0.65), self.actions.clone()], dim = -1)
+            model_obs = (self.get_inferred_obs()[self.env_idx, self.env_step, :]).squeeze(1)
+            
+            obs = torch.cat([((model_obs[:, :1]) * 0.66) - 1.0, (model_obs[:, 1:2]), model_obs[:, 2:3] * (1/3.14), model_obs[:, 3:5] * (1/0.65), model_obs[:, 5:6] * (1/0.65), self.actions.clone()], dim = -1).clone()
             
             priv_obs = model_obs[:, 6:].clone()
+            self.env_step += 1
 
         for r in range(3):
-            k = r * 7 + 6
-            priv_obs[:, k+2] = ((priv_obs[:, k+2]) * 0.66) - (1.0 * (torch.sum(priv_obs[:, k:k+7], dim=-1) > 0.))
+            k = r * 7
+            priv_obs[:, k+2] = ((priv_obs[:, k+2]) * 0.66) - (1.0 * (priv_obs[:, k+5]  > 0.2))
             # priv_obs[:, 3:4] = (priv_obs[:, 3:4]) 
             priv_obs[:, k+4] = (priv_obs[:, k+4]) * (1/3.14) # * ((priv_obs[:, k+4] != 0.0) * 1.0)
             # priv_obs[:, 5:6] = ((priv_obs[:, 5:6]) * 0.66) - 1.0
-            priv_obs[:, k+6] = ((priv_obs[:, k+6]) * (2/ 1.7)) - (1.0 * (torch.sum(priv_obs[:, k:k+7], dim=-1) > 0.))
+            priv_obs[:, k+6] = ((priv_obs[:, k+6]) * (2/ 1.7)) - (1.0 * (priv_obs[:, k+5]  > 0.2))
         
         # add scaled noise
         self.obs_buf[:] = torch.cat([obs, priv_obs], dim=-1)
+
 
         # self.obs_buf[:] = torch.cat([obs, priv_obs[:, :2], priv_obs[:, 2:3]*0.33, priv_obs[:, 3:4], priv_obs[:, 4:5] * (1/3.14), priv_obs[5:6]], dim=-1)
 
@@ -317,14 +389,15 @@ class Navigator(BaseTask):
         num_layers = 8
         input_size = 70
         output_size = 27
-        self.model = MiniTransformer(input_size=input_size, output_size=output_size, embed_size=128, hidden_size=hidden_state_size, num_heads=num_heads, max_sequence_length=sequence_length, num_layers=num_layers)
+        self.model = MiniTransformer(input_size=input_size, output_size=output_size, embed_size=256, hidden_size=hidden_state_size, num_heads=num_heads, max_sequence_length=sequence_length, num_layers=num_layers)
         self.model.load_state_dict(torch.load(ckpt_path))
-        self.model = self.modelmodel.to(device)
+        self.model = self.model.to(device)
         self.model.eval()
 
     def get_inferred_obs(self):
         with torch.inference_mode():
-            return self.model(self.legged_obs_history.clone())
+            src_mask = torch.triu(torch.ones(500, 500) * float('-inf'), diagonal=1).to(self.device)
+            return self.model(self.legged_obs_history.clone(), src_mask)
 
     def reset_idx(self, env_ids):
 
@@ -337,8 +410,10 @@ class Navigator(BaseTask):
         self.gs_buf[env_ids] = False
         self.episode_length_buf[env_ids] = 0
         self.last_actions[env_ids] = 0.
-        self.legged_obs_history[env_ids, :, :] = 0.0
-        self.env_step[env_ids] = 0
+
+        if self.use_scene_model:
+            self.legged_obs_history[env_ids, :, :] = 0.0
+            self.env_step[env_ids] = 0
         
         self.reset_video_camera(env_ids)
 
@@ -550,4 +625,33 @@ class Navigator(BaseTask):
             for name in self.reward_scales.keys()}
         self.episode_sums_eval["total"] = torch.zeros(self.num_envs, dtype=torch.float, device=self.device,
                                                       requires_grad=False)
+        
+    def data_collector(env):
+        input_obs, target_obs, fsw_obs = env.collect_data()
+        actions_ = env.actions.clone().unsqueeze(1)
+        dones_data = env.dones.clone()
+
+        env.input_data[env.env_idx, env.env_step, :] = input_obs.unsqueeze(1)
+        env.target_data[env.env_idx, env.env_step, :] = target_obs.unsqueeze(1)
+        env.fsw_data[env.env_idx, env.env_step, :] = fsw_obs.unsqueeze(1)
+        env.actions_data[env.env_idx, env.env_step, :] = actions_
+        env.done_data[env.env_idx, env.env_step] = ~(dones_data.view(-1, 1))
+        env.env_step += 1
+        
+    def collect_data(env):
+        # input data
+        input_obs = env.legged_env.get_observations()['obs'].clone()
+        
+        
+        # find rotation
+        obs_yaw = torch.atan2(2.0*(env.legged_env.base_quat[:, 0]*env.legged_env.base_quat[:, 1] + env.legged_env.base_quat[:, 3]*env.legged_env.base_quat[:, 2]), 1. - 2.*(env.legged_env.base_quat[:, 1]*env.legged_env.base_quat[:, 1] + env.legged_env.base_quat[:, 2]*env.legged_env.base_quat[:, 2])).view(-1, 1)
+
+        # creating target obs
+        obs = torch.cat([(env.legged_env.base_pos[:, :1] - env.env_origins[:, :1]), (env.legged_env.base_pos[:, 1:2] - env.env_origins[:, 1:2]), obs_yaw , env.legged_env.base_lin_vel[:, :2], env.legged_env.base_ang_vel[:, 2:], ], dim = -1)
+        priv_obs = env.get_privileged_obs().clone()
+        target_obs = torch.cat([obs, priv_obs], dim=-1)
+
+        fsw_obs = env.get_full_seen_world_obs().clone()
+
+        return input_obs, target_obs, fsw_obs
         

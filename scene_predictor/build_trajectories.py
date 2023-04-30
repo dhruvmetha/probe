@@ -54,7 +54,7 @@ def main(data_path, dest_path):
         #         np.savez_compressed(f'{final_dest}/data_{ctr}.npz', **new_data)
         #         ctr += 1
 if __name__ == '__main__':
-    data_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_1/')
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_single_trajectories_1')
+    data_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_2/')
+    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_2_single_trajectories')
     dest_path.mkdir(parents=True, exist_ok=True)
     main(data_path, dest_path)

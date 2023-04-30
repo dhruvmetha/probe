@@ -5,7 +5,7 @@ from params_proto import PrefixProto, ParamsProto
 
 class Cfg(PrefixProto, cli=False):
     class env(PrefixProto, cli=False):
-        num_envs = 2048
+        num_envs = 5
         num_observations = 9 + 21 # 9 + 21
         num_scalar_observations = 9
         # if not None a privilige_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
@@ -300,7 +300,7 @@ class Cfg(PrefixProto, cli=False):
         action_rate = -0.001
         collision = -0.01
         zero_velocity = -0.01
-        # time = -0.01
+        time = -0.01
 
         
     class normalization(PrefixProto, cli=False):

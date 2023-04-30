@@ -117,7 +117,8 @@ class WorldAsset():
         self.world_sampling_dist = torch.zeros(self.world_types, device=self.device, dtype=torch.float, requires_grad=False) + 1/self.world_types
 
         self.base_assets = []
-        if False:
+        if True:
+            print('here')
             asset_options = gymapi.AssetOptions()
             asset_options.disable_gravity = False
             asset_options.fix_base_link = True

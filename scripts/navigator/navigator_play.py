@@ -24,6 +24,7 @@ if __name__ == "__main__":
     
     recent_runs = sorted(glob.glob(f"{MINI_GYM_ROOT_DIR}/runs/high_level_policy/*/*/*"), key=os.path.getmtime)
     model_path = recent_runs[-1]
+    model_path = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-04-29/navigator_train/074651.388323'
     logger.configure(Path(model_path).resolve())
 
     # params = logger.load_pkl('parameters.pkl')
