@@ -6,9 +6,9 @@ from pathlib import Path
 from matplotlib import pyplot as plt
 
 
-def build_traj(data_path, dest_path):
+def build_traj(files, dest_path):
     ctr = 0
-    for f in tqdm(sorted(glob.glob(data_path+'/*.npz'))[:]):
+    for f in tqdm(sorted(files)[:]):
         try:
             data = np.load(f)
             # print(data['input'].shape[0])
@@ -28,13 +28,33 @@ def build_traj(data_path, dest_path):
             ctr += 1
 
 def main(data_path, dest_path):
+    num_workers = 40
+    all_files = glob.glob(str(data_path/'*/*.npz'))
+
+    files_per_worker = 250 # int(len(all_files)/num_workers)
+    
     workers = []
-    for folders in tqdm(sorted(glob.glob(str(data_path/'*')))):
-        final_dest = Path(dest_path)/str((Path(folders).stem))
+    # each worker gets a subset of all_files
+    for i in range(num_workers):
+        final_dest = Path(dest_path)/str(i)
         final_dest.mkdir(parents=True, exist_ok=True)
-        workers.append(mp.Process(target=build_traj, args=(folders, final_dest)))
+
+        start_idx = i*files_per_worker
+        end_idx = (i+1)*files_per_worker
+        # if i == num_workers-1:
+        #     end_idx = len(all_files)
+        files = all_files[start_idx:end_idx]
+
+        workers.append(mp.Process(target=build_traj, args=(files, final_dest)))
+                     
+    # workers = []
+    # for folders in tqdm(sorted(glob.glob(str(data_path/'*')))):
+    #     final_dest = Path(dest_path)/str((Path(folders).stem))
+    #     final_dest.mkdir(parents=True, exist_ok=True)
+    #     workers.append(mp.Process(target=build_traj, args=(folders, final_dest)))
 
     for worker in workers:
+        worker.daemon = True
         worker.start()
     
     for worker in workers:
@@ -55,6 +75,6 @@ def main(data_path, dest_path):
         #         ctr += 1
 if __name__ == '__main__':
     data_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_2/')
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_2_single_trajectories')
+    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_4_single_trajectories')
     dest_path.mkdir(parents=True, exist_ok=True)
     main(data_path, dest_path)

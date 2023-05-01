@@ -6,7 +6,7 @@ import torch
 class TransformerDataset(Dataset):
     def __init__(self, files, sequence_length):
         self.all_folders = files
-        self.sequence_length = int(sequence_length)
+        self.sequence_length = int(sequence_length) + 1
 
     def __len__(self):
         return int((len(self.all_folders)))
@@ -19,14 +19,14 @@ class TransformerDataset(Dataset):
         data = np.load(self.all_folders[idx])
 
         # pose_inp = torch.cat([torch.zeros_like(torch.tensor(data['target'][0:1, :6])), torch.tensor(data['target'][:self.sequence_length-1, :6])], dim=0) # input with 0s concatenated in front (initial state).
-        pose_target = torch.tensor(data['target'][:self.sequence_length, :6]) # target is the difference between the current state and the previous state.
+        pose_target = torch.tensor(data['target'][1:self.sequence_length, :6]) # target is the difference between the current state and the previous state.
         
         # inp =  torch.cat([torch.tensor(data['input'][:self.sequence_length, :]), torch.tensor(data['actions'][:self.sequence_length, :])], dim=-1)
-        inp =  torch.tensor(data['input'][:self.sequence_length, :]) #torch.cat([, torch.tensor(data['actions'][:self.sequence_length, :])], dim=-1)
+        inp =  torch.tensor(data['input'][1:self.sequence_length, :]) #torch.cat([, torch.tensor(data['actions'][:self.sequence_length, :])], dim=-1)
         
-        target =  torch.cat([pose_target, torch.tensor(data['target'][:self.sequence_length, 6:])] , dim=-1)
+        target =  torch.cat([pose_target, torch.tensor(data['target'][1:self.sequence_length, 6:])] , dim=-1)
         
-        mask, fsw = torch.tensor(data['done'][:self.sequence_length]).unsqueeze(-1), torch.tensor(data['fsw'][:self.sequence_length, :])
+        mask, fsw = torch.tensor(data['done'][1:self.sequence_length]).unsqueeze(-1), torch.tensor(data['fsw'][1:self.sequence_length, :])
 
         return inp, target, mask, fsw
 

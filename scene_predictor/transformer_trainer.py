@@ -20,12 +20,13 @@ from config import *
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 window_size = 250
-sequence_length = 500
+sequence_length = 499
 hidden_state_size = 2048
 num_heads = 8
 num_layers = 8
 alg = 'transformer'
 eval_every = 250
+save_every = 750
 print_every = 50
 epochs = 100
 train_batch_size = 32
@@ -34,6 +35,7 @@ learning_rate = 1e-4
 dropout = 0.
 input_size = 70
 output_size = 27
+train_test_split = 0.95
 # RECTS = 2
 
 # wandb.init(project='indep_model_v2', name=f'{alg}_{sequence_length}_{hidden_state_size}')
@@ -42,6 +44,9 @@ SAVE_FOLDER = Path(f'./scene_predictor/results/{alg}_{sequence_length}_{hidden_s
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
 PLOT_FOLDER = 'plots'
 CHECKPOINT_FOLDER = 'checkpoints'
+path = SAVE_FOLDER/f'{CHECKPOINT_FOLDER}'
+path.mkdir(parents=True, exist_ok=True)
+saved_model_idx = 0
 
 with open('./scene_predictor/balanced_data_1.pkl', 'rb') as f:
     balanced_data = pickle.load(f)
@@ -51,7 +56,7 @@ with open('./scene_predictor/balanced_data_1.pkl', 'rb') as f:
 
 all_train_test_files = sorted(balanced_data)
 
-num_train_envs = int(len(all_train_test_files) * 0.98)
+num_train_envs = int(len(all_train_test_files) * train_test_split)
 train_idxs = np.arange(0, num_train_envs).astype(int).tolist()
 val_idxs = np.arange(num_train_envs, len(all_train_test_files)).astype(int).tolist()
 training_files = [all_train_test_files[i] for i in train_idxs]
@@ -209,9 +214,8 @@ for epoch in range(epochs):
 
             train_total_loss = 0
 
-    path = SAVE_FOLDER/f'{CHECKPOINT_FOLDER}'
-    path.mkdir(parents=True, exist_ok=True)
+        if (i+1) % save_every == 0:
+            torch.save(model.state_dict(), path/f'model_{saved_model_idx}.pt')
+            saved_model_idx += 1
 
-    # save model every 20 epochs
-    if (epoch+1) % 1 == 0:
-        torch.save(model.state_dict(), path/f'model_{epoch}.pt')
+torch.save(model.state_dict(), path/f'model_{saved_model_idx}.pt')

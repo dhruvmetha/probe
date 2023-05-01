@@ -8,14 +8,14 @@ import random
 import pickle
 
 if __name__ == '__main__':
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_2_single_trajectories')
+    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_4_single_trajectories')
     files = glob(str(dest_path/'*/*.npz'))
     file = random.choice(files)
     
     data = np.load(file)
 
 
-    pos = data['target'][:, :2]
+    pos = data['target'][1:, :2]
     plt.xlim(-0.5, 3.5)   
     plt.ylim(-1.0, 1.0)
     plt.plot(pos[:, 0], pos[:, 1])

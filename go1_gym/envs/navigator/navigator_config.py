@@ -299,7 +299,7 @@ class Cfg(PrefixProto, cli=False):
         # action_energy = -0.1 # -0.1
         action_rate = -0.001
         collision = -0.01
-        zero_velocity = -0.01
+        zero_velocity = -0.05
         time = -0.01
 
         

@@ -201,7 +201,7 @@ class Navigator(BaseTask):
         
         self.render_gui()
 
-        self.actions[:, :3] = torch.clamp(actions[:, :3], -0.5, 0.5)
+        self.actions[:, :3] = torch.clamp(actions[:, :3], -0.65, 0.65)
 
         # print(torch.sum(torch.square(self.actions[0])))
 
