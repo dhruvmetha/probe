@@ -207,8 +207,6 @@ class Navigator(BaseTask):
         self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
         self.base_quat = self.legged_env.base_quat[:, :].clone()
 
-        
-
         self.episode_length_buf += 1
 
         self.check_termination()
@@ -288,6 +286,8 @@ class Navigator(BaseTask):
         obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone()], dim = -1)
         # add scaled noise
 
+        # obs *= torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65], device=self.device)
+
         # low_level_obs = self.legged_env.actions.clone()
         # low_level_obs = self.legged_env_obs['obs'].clone()
         # print(low_level_obs.shape)
@@ -297,6 +297,8 @@ class Navigator(BaseTask):
         self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
         self.privileged_obs_buf[:] = self.world_env_obs.clone()
         priv_obs = self.privileged_obs_buf.clone()
+
+        # priv_obs *= torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
 
         # priv_obs_noise_scale = 
         # priv_obs = 
@@ -382,12 +384,12 @@ class Navigator(BaseTask):
         self.episode_length_buf[env_ids] = 0
         self.last_actions[env_ids] = 0.
 
-        # if count envs for every env is greater than 100, reset counts to 0 and success to 0
-        if torch.sum(self.count_envs[:self.num_train_envs] > 100) == self.num_train_envs:
+        # if count envs for every env is greater than 10, reset counts to 0 and success to 0
+        if torch.sum(self.count_envs[:self.num_train_envs] > 10) == self.num_train_envs:
             self.count_envs[:self.num_train_envs] = 0
             self.success_envs[:self.num_train_envs] = 0
 
-        if torch.sum(self.count_envs[self.num_train_envs:] > 100) == self.num_eval_envs:
+        if torch.sum(self.count_envs[self.num_train_envs:] > 10) == self.num_eval_envs:
             self.count_envs[self.num_train_envs:] = 0
             self.success_envs[self.num_train_envs:] = 0
 
