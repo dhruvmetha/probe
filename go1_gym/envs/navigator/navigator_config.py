@@ -280,11 +280,11 @@ class Cfg(PrefixProto, cli=False):
         # terminal_distance_gs = 5.0
         # terminal_time_out = 0.0 # -5.0
 
-        # # step rewards
-        # # action_energy = -0.1 # -0.1
-        # # action_rate = -0.001
-        # collision = -0.005
-        # # zero_velocity = -0.01
+        # step rewards
+        # action_energy = -0.1 # -0.1
+        # action_rate = -0.001
+    # collision = -0.005
+        # zero_velocity = -0.01
         # time = -0.001
         
         # side_limits = -0.01
@@ -292,8 +292,8 @@ class Cfg(PrefixProto, cli=False):
 
         # working for 2 obstacles:
         # terminal rewards
-        terminal_distance_gs = 5.0
-        terminal_time_out = 0.0 # -5.0
+        terminal_distance_gs = 10.0
+        terminal_time_out = -5.0 # -5.0
 
         # step rewards
         # action_energy = -0.1 # -0.1
@@ -301,6 +301,7 @@ class Cfg(PrefixProto, cli=False):
         collision = -0.01
         zero_velocity = -0.05
         time = -0.01
+        # torque_energy = -1e-6
 
         
     class normalization(PrefixProto, cli=False):

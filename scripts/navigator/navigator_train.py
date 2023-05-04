@@ -14,11 +14,11 @@ if __name__ == "__main__":
     logger.configure(logger.utcnow(f'high_level_policy/%Y-%m-%d/{stem}/%H%M%S.%f'),
                      root=Path(f"{MINI_GYM_ROOT_DIR}/runs").resolve(), )
 
-    Cfg.env.num_envs = 2048
+    Cfg.env.num_envs = 512
     env = Navigator(Cfg, sim_device='cuda:0', headless=True)
     env = NavigationHistoryWrapper(env)
 
-    env.reset()
+    # env.reset()
 
     gpu_id = 0
     runner = Runner(env, device=f"cuda:{gpu_id}")

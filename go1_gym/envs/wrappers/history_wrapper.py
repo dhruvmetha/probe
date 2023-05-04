@@ -28,14 +28,15 @@ class HistoryWrapper(gym.Wrapper):
         return {'obs': obs, 'privileged_obs': privileged_obs, 'obs_history': self.obs_history}, rew, done, info
 
     def get_observations(self):
-        obs = self.env.get_observations()
+        obs = self.env.get_observations() # all zeros for first call
         privileged_obs = self.env.get_privileged_observations()
-        self.obs_history = torch.cat((self.obs_history[:, self.env.num_obs:], obs), dim=-1)
+        self.obs_history = torch.cat((self.obs_history[:, self.env.num_obs:], obs), dim=-1) # all zeros for first call (init state)
         return {'obs': obs, 'privileged_obs': privileged_obs, 'obs_history': self.obs_history}
 
     def reset_idx(self, env_ids):  # it might be a problem that this isn't getting called!!
         ret = self.env.reset_idx(env_ids)
         self.obs_history[env_ids, :] = 0
+        # self.env.obs_buf[env_ids, :] = 0
         return ret
 
     def reset(self):

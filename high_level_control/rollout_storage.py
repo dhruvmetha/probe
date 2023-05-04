@@ -9,7 +9,7 @@ class RolloutStorage:
         def __init__(self):
             self.observations = None
             self.privileged_observations = None
-            self.next_observations = None
+            
             self.observation_histories = None
             self.critic_observations = None
             self.actions = None
@@ -21,10 +21,14 @@ class RolloutStorage:
             self.action_sigma = None
             self.env_bins = None
 
+            self.next_observations = None
+            # self.low_level_observations = None
+            # self.low_level_next_observations = None
+
         def clear(self):
             self.__init__()
 
-    def __init__(self, num_envs, num_transitions_per_env, obs_shape, privileged_obs_shape, obs_history_shape, actions_shape, device='cpu'):
+    def __init__(self, num_envs, num_transitions_per_env, obs_shape, privileged_obs_shape, obs_history_shape, actions_shape, low_level_obs_shape, device='cpu'):
 
         self.device = device
 
@@ -41,7 +45,8 @@ class RolloutStorage:
         self.rewards = torch.zeros(num_transitions_per_env, num_envs, 1, device=self.device)
         self.actions = torch.zeros(num_transitions_per_env, num_envs, *actions_shape, device=self.device)
         self.dones = torch.zeros(num_transitions_per_env, num_envs, 1, device=self.device).byte()
-
+        # self.low_level_observation = torch.zeros(num_transitions_per_env, num_envs, *low_level_obs_shape, device=self.device)
+        # self.low_level_next_observations = torch.zeros(num_transitions_per_env, num_envs, *low_level_obs_shape, device=self.device)
         # For PPO
         self.actions_log_prob = torch.zeros(num_transitions_per_env, num_envs, 1, device=self.device)
         self.values = torch.zeros(num_transitions_per_env, num_envs, 1, device=self.device)
@@ -70,6 +75,8 @@ class RolloutStorage:
         self.actions_log_prob[self.step].copy_(transition.actions_log_prob.view(-1, 1))
         self.mu[self.step].copy_(transition.action_mean)
         self.sigma[self.step].copy_(transition.action_sigma)
+        # self.low_level_observation[self.step].copy_(transition.low_level_observations)
+        # self.low_level_next_observations[self.step].copy_(transition.low_level_next_observations)
         # self.env_bins[self.step].copy_(transition.env_bins.view(-1, 1))
         self.step += 1
 
@@ -109,7 +116,10 @@ class RolloutStorage:
         next_observations = self.next_observations.flatten(0, 1)
         privileged_obs = self.privileged_observations.flatten(0, 1)
         obs_history = self.observation_histories.flatten(0, 1)
+        # low_level_obs = self.low_level_observation.flatten(0, 1)
+        # low_level_next_obs = self.low_level_next_observations.flatten(0, 1)
         critic_observations = observations
+
 
         actions = self.actions.flatten(0, 1)
         values = self.values.flatten(0, 1)
@@ -132,6 +142,8 @@ class RolloutStorage:
                 critic_observations_batch = critic_observations[batch_idx]
                 privileged_obs_batch = privileged_obs[batch_idx]
                 obs_history_batch = obs_history[batch_idx]
+                # low_level_obs_batch = low_level_obs[batch_idx]
+                # low_level_next_obs_batch = low_level_next_obs[batch_idx]
                 actions_batch = actions[batch_idx]
                 target_values_batch = values[batch_idx]
                 returns_batch = returns[batch_idx]
@@ -140,7 +152,7 @@ class RolloutStorage:
                 old_mu_batch = old_mu[batch_idx]
                 old_sigma_batch = old_sigma[batch_idx]
                 env_bins_batch = old_env_bins[batch_idx]
-                yield obs_batch, next_obs_batch, critic_observations_batch, privileged_obs_batch, obs_history_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, \
+                yield obs_batch, next_obs_batch, critic_observations_batch, privileged_obs_batch, obs_history_batch, actions_batch, None, None, target_values_batch, advantages_batch, returns_batch, \
                        old_actions_log_prob_batch, old_mu_batch, old_sigma_batch, None, env_bins_batch
 
     # for RNNs only

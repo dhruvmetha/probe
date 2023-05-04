@@ -30,7 +30,7 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw):
         alpha = 0.3 if contact.item() < 0.5 else 0.8
         movable = torch.sigmoid(priv_obs[idx][j-1])
 
-        pos, pos_pred, pos_fsw = priv_obs[idx][j:j+2], pred[idx][j:j+2], fsw[idx][j:j+2]
+        pos, pos_pred, pos_fsw = priv_obs[idx][j:j+2], pred[idx][j:j+2], fsw[idx][j:j+2]    
         angle, angle_pred, angle_fsw = torch.rad2deg(priv_obs[idx][j+2:j+3]), torch.rad2deg(pred[idx][j+2:j+3]), torch.rad2deg(fsw[idx][j+2:j+3])
         size, size_pred, size_fsw = priv_obs[idx][j+3:j+5], pred[idx][j+3:j+5], fsw[idx][j+3:j+5]
 

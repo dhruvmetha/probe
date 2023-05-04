@@ -51,9 +51,9 @@ class PPO:
         self.learning_rate = PPO_Args.learning_rate
 
     def init_storage(self, num_envs, num_transitions_per_env, actor_obs_shape, privileged_obs_shape, obs_history_shape,
-                     action_shape):
+                     action_shape, low_level_obs_shape):
         self.storage = RolloutStorage(num_envs, num_transitions_per_env, actor_obs_shape, privileged_obs_shape,
-                                      obs_history_shape, action_shape, self.device)
+                                      obs_history_shape, action_shape, low_level_obs_shape, self.device)
 
     def test_mode(self):
         self.actor_critic.eval()
@@ -75,6 +75,9 @@ class PPO:
         self.transition.privileged_observations = privileged_obs
         self.transition.observation_histories = obs_history
         return self.transition.actions
+    
+    # def add_low_level_obs(self, low_level_obs):
+    #     self.transition.low_level_observations = low_level_obs.clone()
 
     def process_env_step(self, next_observations, rewards, dones, infos):
         self.transition.next_observations = next_observations.clone()
@@ -105,7 +108,7 @@ class PPO:
         mean_decoder_test_loss = 0
         mean_decoder_test_loss_student = 0
         generator = self.storage.mini_batch_generator(PPO_Args.num_mini_batches, PPO_Args.num_learning_epochs)
-        for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
+        for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, low_level_obs_batch, low_level_next_obs_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
             old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
 
             _, value_batch = self.actor_critic.act_evaluate(obs_history_batch, privileged_obs_batch, masks=masks_batch)
@@ -168,28 +171,29 @@ class PPO:
         mean_osm_loss = 0.
         osm_loss_count = 0
         if len(self.one_step_models) > 0:
-            loss_fn = nn.MSELoss(reduction='mean')
-            generator = self.storage.mini_batch_generator(PPO_Args.num_mini_batches, PPO_Args.num_learning_epochs)
-            for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
-                old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
+            for i in range(1):
+                hl_loss_fn = nn.MSELoss(reduction='mean')
+                generator = self.storage.mini_batch_generator(PPO_Args.num_mini_batches, PPO_Args.num_learning_epochs)
+                for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, low_level_obs_batch, low_level_next_obs_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
+                    old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
 
-                osm_idx = np.random.choice(np.arange(0, len(self.one_step_models)))
-                osm_model = self.one_step_models[osm_idx]
-                osm_optimizer = self.one_step_optimizers[osm_idx]
-                latent = None
-                with torch.no_grad():
-                    latent = self.actor_critic.get_latent(obs_history_batch, privileged_obs_batch)
-                    latent_next = self.actor_critic.get_latent(torch.cat([obs_history_batch[:, obs_batch.size(1):], next_obs_batch], dim=-1), privileged_obs_batch)
-                    # print(latent_next.shape)
+                    osm_idx = np.random.choice(np.arange(0, len(self.one_step_models)))
+                    osm_model = self.one_step_models[osm_idx]
+                    osm_optimizer = self.one_step_optimizers[osm_idx]
+                    # latent = None
+                    # with torch.no_grad():
+                    #     # obs_batch[:, :6], 
+                    #     latent = self.actor_critic.get_latent(obs_history_batch, privileged_obs_batch)
+                    #     latent_next = self.actor_critic.get_latent(torch.cat([obs_history_batch[:, obs_batch.size(1):], next_obs_batch], dim=-1), privileged_obs_batch)
 
-                osm_model.train()
-                osm_optimizer.zero_grad()
-                out = osm_model(latent, actions_batch)
-                loss = loss_fn(out, latent_next)
-                loss.backward()
-                osm_optimizer.step()
-                mean_osm_loss += loss.item()
-                osm_loss_count += 1
+                    osm_model.train()
+                    osm_optimizer.zero_grad()
+                    out = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch)
+                    loss = hl_loss_fn(out, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
+                    loss.backward()
+                    osm_optimizer.step()
+                    mean_osm_loss += loss.item()
+                    osm_loss_count += 1
 
         try:
             mean_osm_loss /= osm_loss_count

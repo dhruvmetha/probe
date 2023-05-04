@@ -71,7 +71,7 @@ class LeggedRobot():
         self.rew_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.rew_buf_pos = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.rew_buf_neg = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
-        self.reset_buf = torch.ones(self.num_envs, device=self.device, dtype=torch.long)
+        self.reset_buf = torch.ones(self.num_envs, device=self.device, dtype=torch.bool)
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
         self.time_out_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self.privileged_obs_buf = torch.zeros(self.num_envs, self.num_privileged_obs, device=self.device,
@@ -787,7 +787,7 @@ class LeggedRobot():
         x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 0.0, 0.0, 0.0
         body_height_cmd = 0.05
         step_frequency_cmd = 3.0
-        gait = torch.tensor([0, 0, 0.5])
+        gait = torch.tensor([0., 0, 0.5])
         footswing_height_cmd = 0.08
         pitch_cmd = 0.0
         roll_cmd = 0.0

@@ -6,7 +6,7 @@ class OneStepModel(torch.nn.Module):
         super().__init__()
         self.fc1 = torch.nn.Linear(latent_dim + action_dim, 128)
         self.fc2 = torch.nn.Linear(128, 128)
-        self.fc3 = torch.nn.Linear(128, latent_dim)
+        self.fc3 = torch.nn.Linear(128, output_dim)
         self.relu = torch.nn.ReLU()
 
     def forward(self, observation, action):

@@ -76,32 +76,35 @@ class Runner:
                                       self.env.num_actions
                                       ).to(self.device)
 
-        # one_step_models = [OneStepModel(128, self.env.num_actions, self.env.num_obs).to(self.device) for i in range(5)]
-        one_step_models = None
+        # hl_one_step_models = [OneStepModel(27, self.env.num_actions, 27).to(self.device) for i in range(10)]
+        # ll_one_step_models = [OneStepModel(70, self.env.num_actions, 70).to(self.device) for i in range(10)]
+        # one_step_models = None
+        hl_one_step_models = None
+        ll_one_step_models = None
 
         if RunnerArgs.resume:
             # load pretrained weights from resume_path
-            from ml_logger import ML_Logger
-            loader = ML_Logger(root="http://escher.csail.mit.edu:8080",
-                               prefix=RunnerArgs.resume_path)
-            weights = loader.load_torch("checkpoints/ac_weights_last.pt")
+            # from ml_logger import ML_Logger
+            # loader = ML_Logger(root="http://escher.csail.mit.edu:8080",
+            #                    prefix=RunnerArgs.resume_path)
+            weights = logger.load_torch("checkpoints/ac_weights_last.pt")
             actor_critic.load_state_dict(state_dict=weights)
 
-            if hasattr(self.env, "curricula") and RunnerArgs.resume_curriculum:
-                # load curriculum state
-                distributions = loader.load_pkl("curriculum/distribution.pkl")
-                distribution_last = distributions[-1]["distribution"]
-                gait_names = [key[8:] if key.startswith("weights_") else None for key in distribution_last.keys()]
-                for gait_id, gait_name in enumerate(self.env.category_names):
-                    self.env.curricula[gait_id].weights = distribution_last[f"weights_{gait_name}"]
-                    print(gait_name)
+            # if hasattr(self.env, "curricula") and RunnerArgs.resume_curriculum:
+            #     # load curriculum state
+            #     distributions = loader.load_pkl("curriculum/distribution.pkl")
+            #     distribution_last = distributions[-1]["distribution"]
+            #     gait_names = [key[8:] if key.startswith("weights_") else None for key in distribution_last.keys()]
+            #     for gait_id, gait_name in enumerate(self.env.category_names):
+            #         self.env.curricula[gait_id].weights = distribution_last[f"weights_{gait_name}"]
+            #         print(gait_name)
 
-        self.alg = PPO(actor_critic, one_step_models=one_step_models, device=self.device)
+        self.alg = PPO(actor_critic, one_step_models=hl_one_step_models, device=self.device)
         self.num_steps_per_env = RunnerArgs.num_steps_per_env
 
         # init storage and model
         self.alg.init_storage(self.env.num_train_envs, self.num_steps_per_env, [self.env.num_obs],
-                              [self.env.num_privileged_obs], [self.env.num_obs_history], [self.env.num_actions])
+                              [self.env.num_privileged_obs], [self.env.num_obs_history], [self.env.num_actions], [self.env.legged_env.num_obs])
 
         self.tot_timesteps = 0
         self.tot_time = 0
@@ -145,6 +148,8 @@ class Runner:
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
                     actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs], obs_history[:num_train_envs])
+                    # self.alg.add_low_level_obs(self.env.get_low_level_obs()['obs'][:num_train_envs])
+
                     # if eval_expert:
                     #     actions_eval = self.alg.actor_critic.act_teacher(obs_history[num_train_envs:],
                     #                                                      privileged_obs[num_train_envs:])
@@ -157,9 +162,10 @@ class Runner:
                     intrinsic_reward = 0.
                     if len(self.alg.one_step_models) > 0:
                     # compute intrinsic reward
-                        latents = [osm(self.alg.actor_critic.get_latent(obs_history[:num_train_envs], privileged_obs[:num_train_envs]), actions_train) for osm in self.alg.one_step_models]
+                        latents = [osm(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 9:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
+                        # latents = [osm(self.alg.actor_critic.get_latent(obs_history[:num_train_envs], privileged_obs[:num_train_envs]), actions_train) for osm in self.alg.one_step_models]
                         # print(torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1).shape)
-                        intrinsic_reward_scale = 0.01 * self.env.dt
+                        intrinsic_reward_scale = 1.0 * self.env.dt 
                         intrinsic_reward = torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1)
                         # print(intrinsic_reward[0])
                         intrinsic_reward =  torch.clamp(intrinsic_reward, min=0., max=1.) * intrinsic_reward_scale
@@ -216,12 +222,18 @@ class Runner:
                     if len(done_env_ids) > 0:
                         ep_intrinsic_reward[done_env_ids] = 0.
 
+                    # self.env.compute_observations()
+
                 stop = time.time()
                 collection_time = stop - start
 
                 # Learning step
                 start = stop
                 self.alg.compute_returns(obs_history[:num_train_envs], privileged_obs[:num_train_envs])
+
+
+
+                
 
                 # if it % curriculum_dump_freq == 0:
                 #     logger.save_pkl({"iteration": it,

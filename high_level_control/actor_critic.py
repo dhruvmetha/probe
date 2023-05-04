@@ -84,7 +84,7 @@ class ActorCritic(nn.Module):
         self.input_size = num_obs_history # num_obs #  + num_privileged_obs
         self.output_size = num_actions
 
-        self.shared_memory =  SharedLayers(self.input_size, 128)
+        self.shared_memory =  SharedLayers(self.input_size, 256)
         self.actor = Actor(self.input_size, self.output_size)
         self.critic = Critic(self.input_size, 1)
 

@@ -56,5 +56,7 @@ class CoRLRewards:
             cross[:] += ((self.env.robot_bounding_box[i][:, 0] < -0.35) * 1.0)
         return (cross > 0) * 1.0
     
+    def _reward_torque_energy(self):
+        return torch.square(self.env.legged_env.torques).sum(dim=-1)
 
     

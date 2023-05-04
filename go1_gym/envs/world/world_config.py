@@ -351,7 +351,7 @@ TASK_6 = [
     },
 
     # {
-    #     'name': ['fixed_asset_25', 'fixed_asset_26', 'movable_asset_15'][::-1],
+#     'name': ['fixed_asset_25', 'fixed_asset_26', 'movable_asset_15'][::-1],
     #     'size': [[lambda: 0.3, lambda: 0.7, lambda: 0.4], [lambda: 0.3, lambda: 0.7, lambda: 0.4], [lambda: 0.3, lambda: 0.42, lambda: 0.4]][::-1],
     #     'pos': [[1.2, -(0.93-0.35), 0.2], [1.2, (0.93-0.35), 0.2], [1.5, 0.0, 0.2]][::-1],
     #     'density': [10000, 10000, 8][::-1]
@@ -380,8 +380,8 @@ TASK_6 = [
 # INPLAY_ASSETS = [*RANDOM_INPLAY_ASSETS[1:2]]
 # EVAL_INPLAY_ASSETS = [*RANDOM_INPLAY_ASSETS[1:2]]
 
-INPLAY_ASSETS = [*TASK_0]
-EVAL_INPLAY_ASSETS = [*TASK_0]
+INPLAY_ASSETS = [*TASK_0[2:]]
+EVAL_INPLAY_ASSETS = [*TASK_0[2:]]
 
 # EVAL_INPLAY_ASSETS = [*TASK_1, *TASK_2, *TASK_4, *TASK_5, *TASK_6]
 # INPLAY_ASSETS = [*TASK_1, *TASK_2, *TASK_4, *TASK_6]
