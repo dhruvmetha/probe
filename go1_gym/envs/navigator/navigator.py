@@ -287,7 +287,7 @@ class Navigator(BaseTask):
         obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone()], dim = -1)
         # add scaled noise
 
-        # obs *= torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65], device=self.device)
+        obs *= torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65], device=self.device)
 
         # low_level_obs = self.legged_env.actions.clone()
         # low_level_obs = self.legged_env_obs['obs'].clone()
@@ -299,7 +299,7 @@ class Navigator(BaseTask):
         self.privileged_obs_buf[:] = self.world_env_obs.clone()
         priv_obs = self.privileged_obs_buf.clone()
 
-        # priv_obs *= torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
+        priv_obs *= torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
 
         # priv_obs_noise_scale = 
         # priv_obs = 
