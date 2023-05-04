@@ -140,6 +140,7 @@ class Navigator(BaseTask):
         self.success_envs = torch.zeros(self.num_envs, device=self.device, dtype=torch.int)
         self.count_envs = torch.zeros(self.num_envs, device=self.device, dtype=torch.int)
 
+        self.full_seen_world_obs = torch.zeros(self.num_envs, 21, device=self.device, dtype=torch.float32)
 
     def set_camera(self, position, lookat):
         """ Set camera position and direction

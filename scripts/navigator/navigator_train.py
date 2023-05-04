@@ -14,7 +14,7 @@ if __name__ == "__main__":
     logger.configure(logger.utcnow(f'high_level_policy/%Y-%m-%d/{stem}/%H%M%S.%f'),
                      root=Path(f"{MINI_GYM_ROOT_DIR}/runs").resolve(), )
 
-    Cfg.env.num_envs = 512
+    Cfg.env.num_envs = 2048
     env = Navigator(Cfg, sim_device='cuda:0', headless=True)
     env = NavigationHistoryWrapper(env)
 

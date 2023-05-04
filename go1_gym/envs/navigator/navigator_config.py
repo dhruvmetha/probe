@@ -296,12 +296,14 @@ class Cfg(PrefixProto, cli=False):
         terminal_time_out = -5.0 # -5.0
 
         # # step rewards
-        # # action_energy = -0.1 # -0.1
-        # action_rate = -0.001
-        # collision = -0.01
-        # zero_velocity = -0.05
-        # time = -0.01
-        torque_energy = -5e-5
+        # action_energy = -0.1 # -0.1
+        action_rate = -0.001
+        collision = -0.01
+        zero_velocity = -0.05
+        time = -0.01
+
+        # torque_energy = -5e-5
+        distance = -2e-5
 
         
     class normalization(PrefixProto, cli=False):
