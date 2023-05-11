@@ -142,6 +142,10 @@ class Navigator(BaseTask):
 
         self.full_seen_world_obs = torch.zeros(self.num_envs, 21, device=self.device, dtype=torch.float32)
 
+        self.goal_positions = self.legged_env.goal_positions
+
+        # self.goal_positions = torch.zeros(self.num_envs, device=self.device, dtype=torch.float32)
+
     def set_camera(self, position, lookat):
         """ Set camera position and direction
         """
@@ -183,7 +187,12 @@ class Navigator(BaseTask):
         for i in range(self.cfg.control.decimation):
             self.legged_env.set_commands(new_actions)
             with torch.no_grad():
-                self.legged_env_obs, _, _, _ = self.legged_env.step(self.legged_env.policy(self.legged_env_obs))
+                self.legged_env_obs, _, _, extras = self.legged_env.step(self.legged_env.policy(self.legged_env_obs))
+
+        
+        self.extras.update({
+            'legged_env': extras
+        })
         
         env_ids = self.post_physics_step()
 
@@ -229,9 +238,7 @@ class Navigator(BaseTask):
 
     def check_termination(self):
         self.time_out_buf = self.episode_length_buf >= self.max_episode_length
-
-        self.gs_buf = (self.base_pos[:, 0] - 3.2) > 0
-
+        self.gs_buf = (torch.abs(self.base_pos[:, 0] - self.goal_positions)) < 0.1
         self.reset_buf |= self.time_out_buf
         self.reset_buf |= self.gs_buf
         
@@ -284,10 +291,10 @@ class Navigator(BaseTask):
         obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
         # setup obs buf and scale it to normalize observations
-        obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone()], dim = -1)
+        obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone(), self.goal_positions.view(-1, 1)], dim = -1)
         # add scaled noise
 
-        obs *= torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65], device=self.device)
+        obs *= torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 0.33], device=self.device)
 
         # low_level_obs = self.legged_env.actions.clone()
         # low_level_obs = self.legged_env_obs['obs'].clone()
@@ -340,6 +347,12 @@ class Navigator(BaseTask):
         self.legged_env_obs = self.legged_env.reset()
         self.world_env_obs, self.full_seen_world_obs = self.world_env.reset()
         # self.step(torch.zeros_like(self.actions))
+        self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
+        # self.goal_positions[self.base_pos[:, 0] < 1.5] = 3.2
+        # self.goal_positions[self.base_pos[:, 0] >= 1.5] = -0.2
+
+        # print(self.base_pos[:, 0], self.goal_positions)
+
         return self.obs_buf
 
     def reset_idx(self, env_ids):
@@ -383,7 +396,9 @@ class Navigator(BaseTask):
         self.reset_buf[env_ids] = False
         self.gs_buf[env_ids] = False
         self.episode_length_buf[env_ids] = 0
-        self.last_actions[env_ids] = 0.
+        self.last_actions[env_ids] = 0. 
+
+        # print(self.goal_positions[env_ids])
 
         # if count envs for every env is greater than 10, reset counts to 0 and success to 0
         if torch.sum(self.count_envs[:self.num_train_envs] > 10) == self.num_train_envs:

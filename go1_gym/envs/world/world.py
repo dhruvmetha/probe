@@ -9,8 +9,8 @@ import random
 from go1_gym.envs.world.world_config import *
 
 
-np.random.seed(42)
-torch.manual_seed(42)
+np.random.seed(21)
+torch.manual_seed(21)
 
 class AssetDef:
     def __init__(self, asset, name, base_position) -> None:

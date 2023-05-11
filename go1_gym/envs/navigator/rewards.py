@@ -60,6 +60,6 @@ class CoRLRewards:
         return torch.square(self.env.legged_env.torques).sum(dim=-1)
 
     def _reward_distance(self):
-        return torch.norm(self.env.legged_env.base_pos[:, 0] - 3.2, dim=-1)
+        return torch.norm(self.env.base_pos[:, 0] - self.env.goal_positions, dim=-1)
 
     

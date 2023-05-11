@@ -14,6 +14,8 @@ class NavigationHistoryWrapper(gym.Wrapper):
         super().__init__(env)
         self.env = env
 
+        self.num_train_envs = self.env.num_train_envs
+
         self.obs_history_length = self.env.cfg.env.num_observation_history
 
         self.num_obs_history = self.obs_history_length * self.num_obs
@@ -25,6 +27,7 @@ class NavigationHistoryWrapper(gym.Wrapper):
 
         self.input_data = torch.zeros((env.num_envs, 750, 70), device=env.device)
         self.actions_data = torch.zeros((env.num_envs, 750, 3), device=env.device)
+        self.torques_data = torch.zeros((env.num_envs, 750, 12))
         self.target_data = torch.zeros((env.num_envs, 750, 27), device=env.device)
         self.fsw_data = torch.zeros((env.num_envs, 750, 21), device=env.device)
         self.done_data = torch.zeros((env.num_envs, 750), dtype=torch.bool, device=env.device)
@@ -32,12 +35,12 @@ class NavigationHistoryWrapper(gym.Wrapper):
         self.env_step = torch.zeros((env.num_envs, 1), dtype=torch.long, device=env.device).view(-1, 1)
         self.dones = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
 
-        # self.num_workers = 2
-        # self.q_s = [mp.JoinableQueue(maxsize=500) for _ in range(self.num_workers)]
-        # self.workers = [mp.Process(target=self.worker, args=(q, idx)) for idx, q in enumerate(self.q_s)]
-        # for worker in self.workers:
-        #     worker.daemon = True
-        #     worker.start()
+        self.num_workers = 24
+        self.q_s = [mp.JoinableQueue(maxsize=500) for _ in range(self.num_workers)]
+        self.workers = [mp.Process(target=self.worker, args=(q, idx)) for idx, q in enumerate(self.q_s)]
+        for worker in self.workers:
+            worker.daemon = True
+            worker.start()
 
     def collect_data(self, env):
         # input data
@@ -73,10 +76,12 @@ class NavigationHistoryWrapper(gym.Wrapper):
         self.actions_data[self.env_idx, self.env_step, :] = actions_
         self.done_data[self.env_idx, self.env_step] = ~(dones_data.view(-1, 1))
 
-        self.env_step += 1
-
         # privileged information and observation history are stored in info
         obs, privileged_obs, rew, done, info = self.env.step(action)
+        self.torques_data[self.env_idx, self.env_step, :] = torch.tensor(info["legged_env"]["torques"]).unsqueeze(1)
+
+        self.env_step += 1
+
         # privileged_obs = info["privileged_obs"]
         # self.dones[:] = done
         self.obs_history = torch.cat((self.obs_history[:, self.env.num_obs:], obs), dim=-1)
@@ -86,15 +91,15 @@ class NavigationHistoryWrapper(gym.Wrapper):
         env_ids = done.nonzero(as_tuple=False).flatten()
 
         if len(env_ids) > 0:
-            # self.reset_idx(env_ids)
-            # q_id = np.random.randint(0, self.num_workers)
-            # self.q_s[q_id].put({
-            #     'input': self.input_data[env_ids].clone().cpu(),
-            #     'actions': self.actions_data[env_ids].clone().cpu(),
-            #     'target': self.target_data[env_ids].clone().cpu(),
-            #     'fsw': self.fsw_data[env_ids].clone().cpu(),
-            #     'done': self.done_data[env_ids].clone().cpu(),
-            #     })
+            q_id = np.random.randint(0, self.num_workers)
+            self.q_s[q_id].put({
+                'input': self.input_data[env_ids].clone().cpu(),
+                'actions': self.actions_data[env_ids].clone().cpu(),
+                'target': self.target_data[env_ids].clone().cpu(),
+                'torques': self.torques_data[env_ids].clone().cpu(),
+                'fsw': self.fsw_data[env_ids].clone().cpu(),
+                'done': self.done_data[env_ids].clone().cpu(),
+                })
             self.env_step[env_ids] = 0
             self.input_data[env_ids, :, :] = 0.0
             self.actions_data[env_ids, :, :] = 0.0
@@ -109,14 +114,15 @@ class NavigationHistoryWrapper(gym.Wrapper):
         done_env_horizon = (self.env_step >= 750).nonzero()[:, 0].view(-1)
         if done_env_horizon.size(0) > 0:
             print('time out dones', done_env_horizon)
-            # q_id = np.random.randint(0, self.num_workers)
-            # self.q_s[q_id].put({
-            #     'input': self.input_data[done_env_horizon].clone().cpu(),
-            #     'actions': self.actions_data[done_env_horizon].clone().cpu(),
-            #     'target': self.target_data[done_env_horizon].clone().cpu(),
-            #     'fsw': self.fsw_data[done_env_horizon].clone().cpu(),
-            #     'done': self.done_data[done_env_horizon].clone().cpu(),
-            #     })
+            q_id = np.random.randint(0, self.num_workers)
+            self.q_s[q_id].put({
+                'input': self.input_data[done_env_horizon].clone().cpu(),
+                'actions': self.actions_data[done_env_horizon].clone().cpu(),
+                'target': self.target_data[done_env_horizon].clone().cpu(),
+                'torques': self.torques_data[done_env_horizon].clone().cpu(),
+                'fsw': self.fsw_data[done_env_horizon].clone().cpu(),
+                'done': self.done_data[done_env_horizon].clone().cpu(),
+                })
             self.env_step[done_env_horizon] = 0
             self.input_data[done_env_horizon, :, :] = 0.0
             self.actions_data[done_env_horizon, :, :] = 0.0
@@ -150,7 +156,7 @@ class NavigationHistoryWrapper(gym.Wrapper):
 
 
     def worker(self, q, q_idx):
-        data_path = Path(f'/home/dhruv/projects_dhruv/rollout_data/{q_idx}')
+        data_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_7/{q_idx}')
         data_path.mkdir(parents=True, exist_ok=True)
         
         while True:

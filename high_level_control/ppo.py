@@ -173,7 +173,8 @@ class PPO:
         if len(self.one_step_models) > 0:
             for i in range(1):
                 hl_loss_fn = nn.MSELoss(reduction='mean')
-                generator = self.storage.mini_batch_generator(PPO_Args.num_mini_batches, PPO_Args.num_learning_epochs)
+                # (512 * 25) / 100 = 128 
+                generator = self.storage.mini_batch_generator(100, PPO_Args.num_learning_epochs)
                 for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, low_level_obs_batch, low_level_next_obs_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
                     old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
 
@@ -188,8 +189,13 @@ class PPO:
 
                     osm_model.train()
                     osm_optimizer.zero_grad()
-                    out = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch)
-                    loss = hl_loss_fn(out, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
+                    
+                    decoded_obs, decoded_next_obs, decoded_pred_next_obs, _ = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 10:]], dim=-1), actions_batch, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 10:]], dim=-1))
+
+                    loss = hl_loss_fn(decoded_obs, torch.cat([obs_batch[:, :6], obs_batch[:, 10:]], dim=-1)) + hl_loss_fn(decoded_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 10:]], dim=-1)) + hl_loss_fn(decoded_pred_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 10:]], dim=-1))
+
+                    # out = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch)
+                    # loss = hl_loss_fn(out, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
                     loss.backward()
                     osm_optimizer.step()
                     mean_osm_loss += loss.item()

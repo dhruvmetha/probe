@@ -18,6 +18,23 @@ from go1_gym.utils.terrain import Terrain
 from go1_gym.envs.base.legged_robot_config import Cfg
 from go1_gym.envs.go1.go1_config import config_go1
 
+import torch.nn.functional as F
+# function that converts a torch tensor with a batch of euler angles and convert it to a batch of qauternions
+def euler_to_quaternion(euler):
+
+    batch_size = euler.shape[0]
+    # euler = euler.reshape(-1, 3)
+    quaternion = torch.zeros((batch_size, 4), dtype=torch.float32, device=euler.device)
+    quaternion[:, 0] = torch.cos(euler[:, 0] / 2) * torch.cos(euler[:, 1] / 2) * torch.cos(euler[:, 2] / 2) + torch.sin(
+        euler[:, 0] / 2) * torch.sin(euler[:, 1] / 2) * torch.sin(euler[:, 2] / 2)
+    quaternion[:, 1] = torch.sin(euler[:, 0] / 2) * torch.cos(euler[:, 1] / 2) * torch.cos(euler[:, 2] / 2) - torch.cos(
+        euler[:, 0] / 2) * torch.sin(euler[:, 1] / 2) * torch.sin(euler[:, 2] / 2)
+    quaternion[:, 2] = torch.cos(euler[:, 0] / 2) * torch.sin(euler[:, 1] / 2) * torch.cos(euler[:, 2] / 2) + torch.sin(
+        euler[:, 0] / 2) * torch.cos(euler[:, 1] / 2) * torch.sin(euler[:, 2] / 2)
+    quaternion[:, 3] = torch.cos(euler[:, 0] / 2) * torch.cos(euler[:, 1] / 2) * torch.sin(euler[:, 2] / 2) - torch.sin(
+        euler[:, 0] / 2) * torch.sin(euler[:, 1] / 2) * torch.cos(euler[:, 2] / 2)
+    return quaternion
+
 
 class LeggedRobot():
     def __init__(self, gym, sim, cfg: Cfg, sim_params, env_origins, eval_cfg=None,
@@ -1071,9 +1088,39 @@ class LeggedRobot():
             return
         go1_ids_int32 = torch.tensor([self.gym.find_actor_index(self.envs[i.item()], 'go1', gymapi.DOMAIN_SIM) for i in env_ids], dtype=torch.long, device=self.device)
 
-        self.all_root_states[go1_ids_int32] = self.base_init_state
-        self.all_root_states[go1_ids_int32, :3] += self.env_origins[env_ids]
+        random_base_pos = torch.zeros_like(self.all_root_states[go1_ids_int32]) + self.base_init_state
+        random_pos = True
+        self.goal_positions[env_ids] = 3.2
+        if random_pos:
+            # choose half of the go1_ids_int32 at random((self.all_root_states[go1_ids_int32] > 1.5).float()) * (-0.2)
+            random_idx = torch.arange(len(go1_ids_int32)).numpy()
+            np.random.shuffle(random_idx)
+            random_idx = torch.tensor(random_idx, device=self.device)
 
+            if len(random_idx) == 1:
+                if np.random.uniform() > 0.5:
+                    random_base_pos[:, 0] = torch.rand(1, device=self.device) * (0.16 - (-0.35)) + (-0.35)
+                    
+                else:
+                    random_base_pos[:, 0] = torch.rand(1, device=self.device) * (3.6 - (2.9)) + (2.9)
+            else:
+                first = random_idx[:len(random_idx)//2]
+                second = random_idx[len(random_idx)//2:]
+                random_base_pos[first, [0]*len(first)] = torch.rand(len(first), device=self.device) * (0.16 - (-0.35)) + (-0.35)
+                random_base_pos[second, [0]*len(second)] = torch.rand(len(second), device=self.device) * (3.6 - (2.9)) + (2.9)
+
+                self.goal_positions[env_ids] = (((random_base_pos[:, 0] > 1.5).float()) * (-0.2) ) + (((random_base_pos[:, 0] < 1.5).float()) * (3.2))
+
+            random_rot = torch.zeros(len(go1_ids_int32), 3, device=self.device)
+            random_rot[:, 2] = torch.rand(len(go1_ids_int32), device=self.device) * (np.pi - (-np.pi)) + (-np.pi)
+
+            random_base_pos[:, 1] = torch.rand(len(go1_ids_int32), device=self.device) * (0.65 - (-0.65)) + (-0.65)
+            random_base_pos[:, 3:7] = euler_to_quaternion(random_rot)[..., [1, 2, 3, 0]]
+
+
+        self.all_root_states[go1_ids_int32] = random_base_pos
+        # print(self.all_root_states[go1_ids_int32, 0])
+        self.all_root_states[go1_ids_int32, :3] += self.env_origins[env_ids]
         
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self.all_root_states),
@@ -1246,6 +1293,7 @@ class LeggedRobot():
 
         # initialize some data used later on
         self.common_step_counter = 0
+        self.goal_positions = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)
         self.extras = {}
 
         if self.cfg.terrain.measure_heights:
@@ -1344,6 +1392,7 @@ class LeggedRobot():
             self.joint_pos_err_last = torch.zeros((self.num_envs, 12), device=self.device)
             self.joint_vel_last_last = torch.zeros((self.num_envs, 12), device=self.device)
             self.joint_vel_last = torch.zeros((self.num_envs, 12), device=self.device)
+
 
     def _init_custom_buffers__(self):
         # domain randomization properties

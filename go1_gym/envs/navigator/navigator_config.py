@@ -6,7 +6,7 @@ from params_proto import PrefixProto, ParamsProto
 class Cfg(PrefixProto, cli=False):
     class env(PrefixProto, cli=False):
         num_envs = 5
-        num_observations = 9 + 21 # 9 + 21
+        num_observations = 9 + 1 + 21 # 9 + 21
         num_scalar_observations = 9
         # if not None a privilige_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
         num_privileged_obs = 21
@@ -278,7 +278,7 @@ class Cfg(PrefixProto, cli=False):
 
         # terminal rewards
         # terminal_distance_gs = 5.0
-        # terminal_time_out = 0.0 # -5.0
+        terminal_time_out = -0.2 # -5.0
 
         # step rewards
         # action_energy = -0.1 # -0.1
@@ -292,7 +292,6 @@ class Cfg(PrefixProto, cli=False):
 
         # working for 2 obstacles:
         # terminal rewards
-        terminal_distance_gs = 1.0
         # terminal_time_out = -5.0 # -5.0
 
         # # step rewards
@@ -302,8 +301,9 @@ class Cfg(PrefixProto, cli=False):
         # zero_velocity = -0.05
         # time = -0.01
 
-        torque_energy = -5e-8
-        distance = -1e-6
+        terminal_distance_gs = 1.0
+        # torque_energy = -5e-8
+        distance = -5e-6
 
         
     class normalization(PrefixProto, cli=False):

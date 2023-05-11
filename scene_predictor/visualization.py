@@ -11,7 +11,7 @@ FFwriter = animation.FFMpegWriter
 def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw):
 
     patch_set = []
-
+    
     pos_rob, angle_rob = obs[idx, :2], torch.rad2deg(obs[idx, 3:4])
     pred_pos_rob, pred_angle_rob = pred_obs[idx, :2], torch.rad2deg(pred_obs[idx, 3:4])
     # angle_rob = torch.rad2deg(torch.atan2(2.0*(rot_rob[0]*rot_rob[1] + rot_rob[3]*rot_rob[2]), 1. - 2.*(rot_rob[1]*rot_rob[1] + rot_rob[2]*rot_rob[2])))

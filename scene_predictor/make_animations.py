@@ -86,7 +86,7 @@ while True:
     if not os.path.exists(source_folder):
         time.sleep(5)
         continue
-    updated_file_list = sorted(glob.glob(f"{source_folder}/*.pkl"), key= lambda x: int(x.split('/')[-1].split('.')[0].split('_')[-1]))[-10:]
+    updated_file_list = sorted(glob.glob(f"{source_folder}/*.pkl"), key= lambda x: int(x.split('/')[-1].split('.')[0].split('_')[-1]))[-2:]
     print(updated_file_list)
 
     # check for new files

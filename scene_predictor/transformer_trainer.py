@@ -20,25 +20,25 @@ from config import *
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 window_size = 250
-sequence_length = 499
+sequence_length = 750
 hidden_state_size = 2048
-num_heads = 8
-num_layers = 8
+num_heads = 4
+num_layers = 2
 alg = 'transformer'
 eval_every = 250
 save_every = 750
 print_every = 50
 epochs = 100
-train_batch_size = 32
-test_batch_size = 32
+train_batch_size = 128
+test_batch_size = 128
 learning_rate = 1e-4
 dropout = 0.
-input_size = 70
+input_size = 42
 output_size = 27
 train_test_split = 0.95
 # RECTS = 2
 
-# wandb.init(project='indep_model_v2', name=f'{alg}_{sequence_length}_{hidden_state_size}')
+wandb.init(project='scene_predictor_v1', name=f'{alg}_{sequence_length}_{hidden_state_size}')
 
 SAVE_FOLDER = Path(f'./scene_predictor/results/{alg}_{sequence_length}_{hidden_state_size}/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}')
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
@@ -48,8 +48,13 @@ path = SAVE_FOLDER/f'{CHECKPOINT_FOLDER}'
 path.mkdir(parents=True, exist_ok=True)
 saved_model_idx = 0
 
-with open('./scene_predictor/balanced_data_1.pkl', 'rb') as f:
+with open('./scene_predictor/balanced_data_5.pkl', 'rb') as f:
     balanced_data = pickle.load(f)
+
+# with open('./scene_predictor/balanced_data_5_val.pkl', 'rb') as f:
+#     val_balanced_data = pickle.load(f)
+
+# balanced_data = sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_3_single_trajectories1/*/*.npz')) + sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1/*/*.npz')) + sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_6_single_trajectories1/*/*.npz'))
 
 # traj_data_file = '/common/users/dm1487/legged_manipulation_data/rollout_data/nsf/fresh_data_trajectories_3'
 # all_train_test_files = sorted(glob(f'{traj_data_file}/*/*.npz'))
@@ -62,11 +67,14 @@ val_idxs = np.arange(num_train_envs, len(all_train_test_files)).astype(int).toli
 training_files = [all_train_test_files[i] for i in train_idxs]
 val_files = [all_train_test_files[i] for i in val_idxs]
 
+# training_files = balanced_data
+# val_files = val_balanced_data
+
 train_ds = TransformerDataset(files=training_files, sequence_length=sequence_length)
 train_dl = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True)
 
 val_ds = TransformerDataset(files=val_files, sequence_length=sequence_length)
-val_dl = DataLoader(val_ds, batch_size=train_batch_size, shuffle=True)
+val_dl = DataLoader(val_ds, batch_size=test_batch_size, shuffle=True)
 
 print(len(train_ds), len(val_ds))
 
@@ -89,7 +97,6 @@ def loss_fn(out, targ, mask):
 
     loss2 = F.binary_cross_entropy(torch.sigmoid(out[:, :, k+1:k+2]), targ[:, :, k+1:k+2], reduction='none') + F.binary_cross_entropy(torch.sigmoid(out[:, :, k+8:k+9]), targ[:, :, k+8:k+9], reduction='none') + F.binary_cross_entropy(torch.sigmoid(out[:, :, k+15:k+16]), targ[:, :, k+15:k+16], reduction='none') # + F.binary_cross_entropy(torch.sigmoid(out[:, :, 22:23]), targ[:, :, 22:23], reduction='none')
 
-
     loss3 = F.mse_loss(out[:, :, k+2:k+4], targ[:, :, k+2:k+4], reduction='none') + F.mse_loss(out[:, :, k+9:k+11], targ[:, :, k+9:k+11], reduction='none') + F.mse_loss(out[:, :, k+16:k+18], targ[:, :, k+16:k+18], reduction='none') # + F.mse_loss(out[:, :, 23:25], targ[:, :, 23:25], reduction='none')
     loss3 = torch.sum(loss3, dim=-1).unsqueeze(-1)
 
@@ -102,7 +109,7 @@ def loss_fn(out, targ, mask):
     
     return loss1, loss2, loss3, loss4, loss_pose
 
-src_mask = torch.triu(torch.ones(sequence_length, sequence_length) * float('-inf'), diagonal=1).to(device)
+src_mask = torch.triu(torch.ones(sequence_length-1, sequence_length-1) * float('-inf'), diagonal=1).to(device)
 all_anim = []
 patches_ctr = 0
 for epoch in range(epochs):
@@ -136,18 +143,18 @@ for epoch in range(epochs):
         current_train_loss += loss.item()
         train_total_loss += loss.item()
 
+        wandb.log({
+            'train/contact': (torch.sum(loss1*mask)/torch.sum(mask)).item(),
+            'train/movable': (torch.sum(loss2*mask)/torch.sum(mask)).item(),
+            'train/location': (torch.sum(loss3*mask)/torch.sum(mask)).item(),
+            'train/reconstruction': (torch.sum(loss4*mask)/torch.sum(mask)).item(),
+            'train/pose': (torch.sum(loss_pose*mask)/torch.sum(mask)).item(),
+        })
         if (i+1)%print_every == 0:
             print(f'step {i+1}:', current_train_loss/print_every)
             current_train_loss = 0
 
         # with torch.no_grad():
-        #     wandb.log({
-        #         'train/contact': (torch.sum(loss1*mask)/torch.sum(mask)).item(),
-        #         'train/movable': (torch.sum(loss2*mask)/torch.sum(mask)).item(),
-        #         'train/location': (torch.sum(loss3*mask)/torch.sum(mask)).item(),
-        #         'train/reconstruction': (torch.sum(loss4*mask)/torch.sum(mask)).item(),
-        #         'train/pose': (torch.sum(loss_pose*mask)/torch.sum(mask)).item(),
-        #     })
 
         anim_ctr = 0 
 
@@ -156,15 +163,29 @@ for epoch in range(epochs):
             anim_idx = np.random.randint(0, test_batch_size)
             with torch.inference_mode():
                 model.eval()
-                for i, (inp, targ, mask, fsw) in tqdm(enumerate(val_dl)):
+                for idx, (inp, targ, mask, fsw) in tqdm(enumerate(val_dl)):
+                    # print('val', inp.shape, targ.shape, mask.shape, fsw.shape)
+                    # print(inp.shape[-1])
                     inp = inp.to(device)
+                    pred_out = inp.clone()
                     targ = targ.to(device)
                     mask = mask.to(device)
                     fsw = fsw.to(device)
-
+                    # pred_out[:, :, :] = inp[:, :, :]
+                    # for step in range(inp.shape[1]-1):
+                    #     out = model(pred_out, src_mask=src_mask)
+                    #     # pred_out[:, step+1, :] = inp[:, step+1, :]
+                    #     pred_out[:, step+1, :6] = pred_out[:, step, :6] + out[:, step, :6]
+                    #     pred_out[:, step+1, 6:8] = out[:, step, 6:8]
+                    #     pred_out[:, step+1, 8:13] = pred_out[:, step, 8:13] + out[:, step, 8:13]
+                    #     pred_out[:, step+1, 13:15] = out[:, step, 13:15]
+                    #     pred_out[:, step+1, 15:20] = pred_out[:, step, 15:20] + out[:, step, 15:20]
+                    #     pred_out[:, step+1, 20:22] = out[:, step, 20:22]
+                    #     pred_out[:, step+1, 22:27] = pred_out[:, step, 22:27] + out[:, step, 22:27]
+                        
                     anim_idx = min(anim_idx, inp.shape[0]-1)
 
-                    out = model(inp, src_mask=src_mask)
+                    out = model(pred_out, src_mask=src_mask)
 
                     loss1, loss2, loss3, loss4, loss_pose = loss_fn(out, targ, mask)
                     loss = (loss1 + loss2 + loss3 + loss4 + loss_pose)
@@ -172,24 +193,35 @@ for epoch in range(epochs):
 
                     val_total_loss += loss.item()
 
-                    # wandb.log({
-                    #         'eval/contact': (torch.sum(loss1*mask)/torch.sum(mask)).item(),
-                    #         'eval/movable': (torch.sum(loss2*mask)/torch.sum(mask)).item(),
-                    #         'eval/location': (torch.sum(loss3*mask)/torch.sum(mask)).item(),
-                    #         'eval/reconstruction': (torch.sum(loss4*mask)/torch.sum(mask)).item(),
-                    #         'eval/pose': (torch.sum(loss_pose*mask)/torch.sum(mask)).item(),
-                    # })
+                    wandb.log({
+                            'eval/contact': (torch.sum(loss1*mask)/torch.sum(mask)).item(),
+                            'eval/movable': (torch.sum(loss2*mask)/torch.sum(mask)).item(),
+                            'eval/location': (torch.sum(loss3*mask)/torch.sum(mask)).item(),
+                            'eval/reconstruction': (torch.sum(loss4*mask)/torch.sum(mask)).item(),
+                            'eval/pose': (torch.sum(loss_pose*mask)/torch.sum(mask)).item(),
+                    })
                     
-                    if anim_ctr < 10:
+                    if anim_ctr < 2:
                         patches = []
+                        # targ = targ[:, :, :].clone()
+                        targ[:, :, :6] *= torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device).unsqueeze(0)
+                        targ[:, :, 6:] *= torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device).unsqueeze(0)
                         # print(inp.shape[1])
+
+                        # out_obs = out[:, :, :].clone()
+                        out[:, :, :6] *= torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device).unsqueeze(0)
+                        out[:, :, 6:] *= torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device).unsqueeze(0)
+
                         for step in range(inp.shape[1]):
                             # print(mask[anim_idx, step, 0])
                             if mask[anim_idx, step, 0]:
-                                patch_set = get_visualization(anim_idx, targ[:, step, :6].squeeze(1), targ[:, step, 6:].squeeze(1), out[:, step, :6].squeeze(1), out[:, step, 6:].squeeze(1), fsw[:, step, :].squeeze(1))
+                                patch_set = get_visualization(anim_idx, targ[:, step, :6], targ[:, step, 6:], out[:, step, :6], out[:, step, 6:], fsw[:, step, :].squeeze(1))
                                 patches.append(patch_set)
                         all_anim.append(patches)
                         anim_ctr += 1
+                    
+                    # if idx == 30:
+                    #     break
             
             path = SAVE_FOLDER/f'{PLOT_FOLDER}'
             path.mkdir(parents=True, exist_ok=True)
@@ -218,4 +250,11 @@ for epoch in range(epochs):
             torch.save(model.state_dict(), path/f'model_{saved_model_idx}.pt')
             saved_model_idx += 1
 
+        # wandb.log({
+        #     'train/loss': train_total_loss/eval_every,
+        #     'eval/loss': val_total_loss/len(val_dl)
+        # })
+    train_total_loss = 0
+    current_train_loss = 0
+        
 torch.save(model.state_dict(), path/f'model_{saved_model_idx}.pt')

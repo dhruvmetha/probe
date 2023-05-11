@@ -11,11 +11,12 @@ def build_traj(files, dest_path):
     for f in tqdm(sorted(files)[:]):
         try:
             data = np.load(f)
-            # print(data['input'].shape[0])
-            for i in range(data['input'].shape[0]):
+            print(data['input'].shape[0])
+            for i in tqdm(range(data['input'].shape[0])):
                 new_data = {
                     'input': data['input'][i],
                     'target': data['target'][i],
+                    'torques': data['torques'][i],
                     'actions': data['actions'][i],
                     'fsw': data['fsw'][i],
                     'done': data['done'][i],
@@ -28,10 +29,11 @@ def build_traj(files, dest_path):
             ctr += 1
 
 def main(data_path, dest_path):
-    num_workers = 40
+    num_workers = 24
     all_files = glob.glob(str(data_path/'*/*.npz'))
+    print(len(all_files))
 
-    files_per_worker = 250 # int(len(all_files)/num_workers)
+    files_per_worker = max(1, int(len(all_files)/num_workers))
     
     workers = []
     # each worker gets a subset of all_files
@@ -74,7 +76,7 @@ def main(data_path, dest_path):
         #         np.savez_compressed(f'{final_dest}/data_{ctr}.npz', **new_data)
         #         ctr += 1
 if __name__ == '__main__':
-    data_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_2/')
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data/rollout_data/multi_policy_4_single_trajectories')
+    data_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_5/')
+    dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_5_single_trajectories')
     dest_path.mkdir(parents=True, exist_ok=True)
     main(data_path, dest_path)

@@ -8,7 +8,7 @@ from ml_logger import logger
 from params_proto import PrefixProto
 
 from .actor_critic import ActorCritic
-from .one_step_model import OneStepModel
+from .one_step_model import OneStepModel, OneStep
 from .rollout_storage import RolloutStorage
 
 from tqdm import tqdm
@@ -77,10 +77,11 @@ class Runner:
                                       ).to(self.device)
 
         # hl_one_step_models = [OneStepModel(27, self.env.num_actions, 27).to(self.device) for i in range(10)]
+        hl_one_step_models = None
+        # hl_one_step_models = [OneStep(27, self.env.num_actions, 8).to(self.device) for i in range(5)]
         # ll_one_step_models = [OneStepModel(70, self.env.num_actions, 70).to(self.device) for i in range(10)]
         # one_step_models = None
-        hl_one_step_models = None
-        ll_one_step_models = None
+        # ll_one_step_models = None
 
         if RunnerArgs.resume:
             # load pretrained weights from resume_path
@@ -158,14 +159,15 @@ class Runner:
 
                     actions_eval = self.alg.actor_critic.act(obs_history[num_train_envs:], privileged_obs[num_train_envs:])
                     
-                    
                     intrinsic_reward = 0.
                     if len(self.alg.one_step_models) > 0:
                     # compute intrinsic reward
-                        latents = [osm(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 9:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
+                        latents = [osm.transition(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 10:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
+
+                        # latents = [osm(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 9:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
                         # latents = [osm(self.alg.actor_critic.get_latent(obs_history[:num_train_envs], privileged_obs[:num_train_envs]), actions_train) for osm in self.alg.one_step_models]
                         # print(torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1).shape)
-                        intrinsic_reward_scale = 1.0 * self.env.dt 
+                        intrinsic_reward_scale = 0.01 * self.env.dt
                         intrinsic_reward = torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1)
                         # print(intrinsic_reward[0])
                         intrinsic_reward =  torch.clamp(intrinsic_reward, min=0., max=1.) * intrinsic_reward_scale
