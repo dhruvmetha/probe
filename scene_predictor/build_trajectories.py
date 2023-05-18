@@ -28,9 +28,9 @@ def build_traj(files, dest_path):
             print(f'missed {ctr}')
             ctr += 1
 
-def main(data_path, dest_path):
+def main(all_files, dest_path):
     num_workers = 24
-    all_files = glob.glob(str(data_path/'*/*.npz'))
+    # all_files = glob.glob(str(data_path/'*/*.npz'))
     print(len(all_files))
 
     files_per_worker = max(1, int(len(all_files)/num_workers))
@@ -76,7 +76,17 @@ def main(data_path, dest_path):
         #         np.savez_compressed(f'{final_dest}/data_{ctr}.npz', **new_data)
         #         ctr += 1
 if __name__ == '__main__':
-    data_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_5/')
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_5_single_trajectories')
+    data_path1 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_1/')
+    data_path2 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_2/')
+    data_path3 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_3/')
+
+    print(len(glob.glob(str(data_path1/'*/*.npz'))), len(glob.glob(str(data_path2/'*/*.npz'))), len(glob.glob(str(data_path3/'*/*.npz'))))
+
+    # exit()
+
+    all_files = glob.glob(str(data_path1/'*/*.npz')) + glob.glob(str(data_path2/'*/*.npz')) + glob.glob(str(data_path3/'*/*.npz'))
+    
+
+    dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_1_single_trajectories')
     dest_path.mkdir(parents=True, exist_ok=True)
-    main(data_path, dest_path)
+    main(all_files, dest_path)

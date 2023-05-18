@@ -291,15 +291,15 @@ class Navigator(BaseTask):
         obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
         # setup obs buf and scale it to normalize observations
-        obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone(), self.goal_positions.view(-1, 1)], dim = -1)
+        obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone()], dim = -1)
+
+        # obs scaling or normalization
+        scaling_vec = torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65], device=self.device)
+        obs *= scaling_vec
+
         # add scaled noise
-
-        obs *= torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 0.33], device=self.device)
-
-        # low_level_obs = self.legged_env.actions.clone()
-        # low_level_obs = self.legged_env_obs['obs'].clone()
-        # print(low_level_obs.shape)
-
+        
+        # obs += torch.randn_like(obs) * 0.1 * scaling_vec
 
         # setup privileged obs buf and scale it to normalize observations
         self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
@@ -307,6 +307,10 @@ class Navigator(BaseTask):
         priv_obs = self.privileged_obs_buf.clone()
 
         priv_obs *= torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
+        # priv_obs += torch.randn_like(priv_obs) * 0.1 *  torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
+        # priv_obs[:, :2] = torch.clamp(priv_obs[:, :2], min=0, max=1)
+        # priv_obs[:, 7:9] = torch.clamp(priv_obs[:, 7:9], min=-1, max=1)
+        # priv_obs[:, 14:16] = torch.clamp(priv_obs[:, 14:16], min=-1, max=1)
 
         # priv_obs_noise_scale = 
         # priv_obs = 

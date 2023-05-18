@@ -10,6 +10,7 @@ from isaacgym.torch_utils import *
 
 assert gymtorch
 import torch
+import math
 
 from go1_gym import MINI_GYM_ROOT_DIR
 from go1_gym.envs.base.base_task import BaseTask
@@ -1090,7 +1091,7 @@ class LeggedRobot():
 
         random_base_pos = torch.zeros_like(self.all_root_states[go1_ids_int32]) + self.base_init_state
         random_pos = True
-        self.goal_positions[env_ids] = 3.2
+        self.goal_positions[env_ids] = 3.5
         if random_pos:
             # choose half of the go1_ids_int32 at random((self.all_root_states[go1_ids_int32] > 1.5).float()) * (-0.2)
             random_idx = torch.arange(len(go1_ids_int32)).numpy()
@@ -1098,18 +1099,18 @@ class LeggedRobot():
             random_idx = torch.tensor(random_idx, device=self.device)
 
             if len(random_idx) == 1:
-                if np.random.uniform() > 0.5:
+                if np.random.uniform() > 0.1:
                     random_base_pos[:, 0] = torch.rand(1, device=self.device) * (0.16 - (-0.35)) + (-0.35)
-                    
                 else:
-                    random_base_pos[:, 0] = torch.rand(1, device=self.device) * (3.6 - (2.9)) + (2.9)
+                    random_base_pos[:, 0] = torch.rand(1, device=self.device) * (3.1 - (2.9)) + (2.9)
             else:
-                first = random_idx[:len(random_idx)//2]
-                second = random_idx[len(random_idx)//2:]
+                margin = int(math.ceil(len(random_idx) * 9/10))
+                first = random_idx[:margin]
+                second = random_idx[margin:]
                 random_base_pos[first, [0]*len(first)] = torch.rand(len(first), device=self.device) * (0.16 - (-0.35)) + (-0.35)
-                random_base_pos[second, [0]*len(second)] = torch.rand(len(second), device=self.device) * (3.6 - (2.9)) + (2.9)
+                random_base_pos[second, [0]*len(second)] = torch.rand(len(second), device=self.device) * (3.1 - (2.9)) + (2.9)
 
-                self.goal_positions[env_ids] = (((random_base_pos[:, 0] > 1.5).float()) * (-0.2) ) + (((random_base_pos[:, 0] < 1.5).float()) * (3.2))
+                # self.goal_positions[env_ids] = (((random_base_pos[:, 0] > 1.5).float()) * (-0.2) ) + (((random_base_pos[:, 0] < 1.5).float()) * (3.2))
 
             random_rot = torch.zeros(len(go1_ids_int32), 3, device=self.device)
             random_rot[:, 2] = torch.rand(len(go1_ids_int32), device=self.device) * (np.pi - (-np.pi)) + (-np.pi)

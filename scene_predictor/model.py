@@ -47,7 +47,7 @@ class MiniTransformer(nn.Module):
     def forward(self, x, src_mask):
         x = self.linear_in(x)
         x = self.positonal_embedding(x)
-        x = self.encoder(x, mask=src_mask)
+        x = self.encoder(x, mask=src_mask, )
         x = self.linear_out(x)
         return x
 

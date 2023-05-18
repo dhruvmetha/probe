@@ -8,22 +8,28 @@ import torch
 import pickle
 
 if __name__ == '__main__':
-    dest_path1 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_6_single_trajectories1')
-    dest_path2 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_3_single_trajectories1')
-    dest_path3 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1')
+    # dest_path1 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_6_single_trajectories1')
+    # dest_path2 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_3_single_trajectories1')
+    # dest_path3 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1')
+    # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_5_single_trajectories')
 
+    dest_path1 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_1_single_trajectories')
+    # dest_path2 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_test_2_single_trajectories')
+    # dest_path3 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_test_3_single_trajectories')
+    # dest_path3 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1')
+    # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_5_single_trajectories')
 
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/random_seed_5_single_trajectories')
 
     while True:
         lin_vel = []
         plt.figure(figsize=(20, 8))
-        plt.xlim(-1.0, 4.0)   
+        plt.xlim(-1.0, 4.0)
         plt.ylim(-1.0, 1.0)
-        print(len(glob(str(dest_path/'*/*.npz'))))
-        files = glob(str(dest_path/'*/*.npz')) # [:10000]  + glob(str(dest_path1/'*/*.npz'))[:10000] + glob(str(dest_path2/'*/*.npz'))[:10000] + glob(str(dest_path3/'*/*.npz'))[:10000]
-        for i in range(2):
-            # print(len(files))
+        # print(len(glob(str(dest_path/'*/*.npz'))))
+        # files = glob(str(dest_path/'*/*.npz')) # [:10000]  + glob(str(dest_path1/'*/*.npz'))[:10000] + glob(str(dest_path2/'*/*.npz'))[:10000] + glob(str(dest_path3/'*/*.npz'))[:10000]
+        files = glob(str(dest_path1/'*/*.npz')) # + glob(str(dest_path2/'*/*.npz')) + glob(str(dest_path3/'*/*.npz'))# + glob(str(dest_path2/'*/*.npz'))[:10000] + glob(str(dest_path3/'*/*.npz'))[:10000]
+        print(len(files))
+        for i in range(200):
             # exit()
             file = random.choice(files)
             data = np.load(file)

@@ -16,13 +16,13 @@ if __name__ == "__main__":
 
     Cfg.env.num_envs = 512
     env = Navigator(Cfg, sim_device='cuda:0', headless=True)
-    env = NavigationHistoryWrapper(env)
+    env = NavigationHistoryWrapper(env, save_data=True, save_folder='random_pos_seed_test_3')
 
     # env.reset()
 
     gpu_id = 0
     runner = Runner(env, device=f"cuda:{gpu_id}")
-    runner.learn(num_learning_iterations=100000, init_at_random_ep_len=False, eval_freq=100)
+    runner.learn(num_learning_iterations=1000, init_at_random_ep_len=False, eval_freq=100)
 
     # x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 0.65, 0, -0.1 # np.random.uniform(-0.65, 0.65), np.random.uniform(-0.65, 0.65), np.random.uniform(-0.65, 0.65)
     # body_height_cmd = 0.0
