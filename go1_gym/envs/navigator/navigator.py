@@ -20,14 +20,15 @@ from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
 from go1_gym.envs.go1.velocity_tracking import VelocityTrackingEasyEnv
 from go1_gym.utils.math_utils import quat_apply_yaw
 
-from scene_predictor.model import MiniTransformer
-
-
+# from scene_predictor.model import MiniTransformer
+from scene_predictor.inference import ObstacleInference
+from scene_predictor.inference import PoseInference
 
 
 class Navigator(BaseTask):
-    def __init__(self, cfg: Cfg, sim_device, headless, num_envs=None, eval_cfg:Cfg=None, physics_engine="SIM_PHYSX", initial_dynamics_dict=None, save_data=False, use_scene_model=False, scene_model_ckpt='/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_500_2048/2023-04-30_03-56-22/checkpoints/model_15.pt'):
-        self.use_scene_model = use_scene_model
+    def __init__(self, cfg: Cfg, sim_device, headless, num_envs=None, eval_cfg:Cfg=None, physics_engine="SIM_PHYSX", initial_dynamics_dict=None, save_data=False, use_localization_model=False, use_obstacle_model=True):
+        self.use_obstacle_model = use_obstacle_model
+        self.use_localization_model = use_localization_model
         self.cfg = cfg
         self.eval_cfg = eval_cfg
         self.save_data = save_data
@@ -67,6 +68,7 @@ class Navigator(BaseTask):
 
         super().__init__(cfg, sim_params, physics_engine, sim_device, headless, eval_cfg)
 
+        self.inference_model_device = 'cuda:1'
         self.__init_buffers()
 
         if not self.headless:
@@ -78,6 +80,16 @@ class Navigator(BaseTask):
         self.world_env.reset()
 
         self._prepare_reward_function()
+
+        if self.use_obstacle_model:
+            PRIV_INFO_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_16-57-15')
+            obstacle_model_path=str(PRIV_INFO_FOLDER/'checkpoints/model_19.pt')
+            self.obstacle_inference = ObstacleInference(model_path=obstacle_model_path, sequence_length=750, device=self.inference_model_device)
+
+        if self.use_localization_model:
+            POSE_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45')
+            localization_model_path=str(POSE_FOLDER/'checkpoints/model_96.pt')
+            self.localization_inference = PoseInference(model_path=localization_model_path, sequence_length=750, device=self.inference_model_device)
         
     def _pre_create_env(self):
 
@@ -144,7 +156,11 @@ class Navigator(BaseTask):
 
         self.goal_positions = self.legged_env.goal_positions
 
-        # self.goal_positions = torch.zeros(self.num_envs, device=self.device, dtype=torch.float32)
+        self.env_ids = torch.arange(self.num_envs, device=self.inference_model_device, dtype=torch.long).view(-1, 1)
+        self.env_step = torch.zeros(self.num_envs, 1, device=self.device, dtype=torch.long)
+
+        self.priv_info_inp = torch.zeros(self.num_envs, 750, 12+3+24+6, device=self.inference_model_device, dtype=torch.float32)
+        self.pose_inp = torch.zeros(self.num_envs, 750, 27, device=self.inference_model_device, dtype=torch.float32)
 
     def set_camera(self, position, lookat):
         """ Set camera position and direction
@@ -189,7 +205,6 @@ class Navigator(BaseTask):
             with torch.no_grad():
                 self.legged_env_obs, _, _, extras = self.legged_env.step(self.legged_env.policy(self.legged_env_obs))
 
-        
         self.extras.update({
             'legged_env': extras
         })
@@ -284,29 +299,51 @@ class Navigator(BaseTask):
             self.episode_sums["termination"] += rew
 
     def compute_observations(self):
+        self.env_step += 1
         self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
         self.base_quat = self.legged_env.base_quat[:, :].clone()
 
-        # if not self.use_scene_model:
-        obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
+        if self.use_localization_model or self.use_obstacle_model:
+            torques = self.legged_env.torques[:, :].clone()
+            projected_gravity = self.legged_env.projected_gravity[:, :].clone()
+            joint_pos = self.legged_env.dof_pos[:, :].clone()
+            joint_vel = self.legged_env.dof_vel[:, :].clone()
+            self.pose_inp[self.env_ids, self.env_step, :] = torch.cat([projected_gravity, joint_pos, joint_vel], dim=-1).unsqueeze(1).to(self.inference_model_device)
 
-        # setup obs buf and scale it to normalize observations
-        obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone()], dim = -1)
+            self.priv_info_inp[self.env_ids, self.env_step, :-6] = torch.cat([torques, projected_gravity, joint_pos, joint_vel], dim=-1).unsqueeze(1).to(self.inference_model_device)
 
-        # obs scaling or normalization
-        scaling_vec = torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65], device=self.device)
-        obs *= scaling_vec
+        if self.use_localization_model:
+            obs = (self.localization_inference.predict(self.pose_inp[:, 1:, :].clone())[self.env_ids, self.env_step-1, :]).squeeze(1)
+            obs = torch.cat([obs, self.actions.clone()], dim=-1)
 
-        # add scaled noise
-        
-        # obs += torch.randn_like(obs) * 0.1 * scaling_vec
+        else:
+            # if not self.use_scene_model:
+            obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
-        # setup privileged obs buf and scale it to normalize observations
-        self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
-        self.privileged_obs_buf[:] = self.world_env_obs.clone()
-        priv_obs = self.privileged_obs_buf.clone()
+            # setup obs buf and scale it to normalize observations
+            obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone()], dim = -1)
 
-        priv_obs *= torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
+            # obs scaling or normalization
+            scaling_vec = torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65], device=self.device)
+            obs *= scaling_vec
+
+        if self.use_obstacle_model:
+            self.priv_info_inp[self.env_ids, self.env_step, -6:] = obs[:, :6].unsqueeze(1).to(self.inference_model_device)
+            priv_obs = self.obstacle_inference.predict(self.priv_info_inp[:, 1:, :].clone())[self.env_ids, self.env_step-1, :].squeeze(1)
+            priv_obs[:, :7] = priv_obs[:, :7] * (torch.prod(priv_obs[:, 5:7], dim=-1) > 0.1).float().view(-1, 1)
+            priv_obs[:, 7:14] = priv_obs[:, 7:14] * (torch.prod(priv_obs[:, 12:14], dim=-1) > 0.1).float().view(-1, 1)
+            priv_obs[:, 14:21] = priv_obs[:, 14:21] * (torch.prod(priv_obs[:, 19:21], dim=-1) > 0.1).float().view(-1, 1)
+            self.privileged_obs_buf[:] = priv_obs.clone().to(self.device)
+            priv_obs = self.privileged_obs_buf.clone()
+        else:
+            # setup privileged obs buf and scale it to normalize observations
+            self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
+            self.privileged_obs_buf[:] = self.world_env_obs.clone()
+            priv_obs = self.privileged_obs_buf.clone()
+
+            # add scaled noise
+            # obs += torch.randn_like(obs) * 0.1 * scaling_vec
+            priv_obs *= torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
         # priv_obs += torch.randn_like(priv_obs) * 0.1 *  torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
         # priv_obs[:, :2] = torch.clamp(priv_obs[:, :2], min=0, max=1)
         # priv_obs[:, 7:9] = torch.clamp(priv_obs[:, 7:9], min=-1, max=1)
@@ -319,7 +356,6 @@ class Navigator(BaseTask):
 
         #     input_obs = self.legged_env.get_observations()['obs'].clone()
         #     self.legged_obs_history[self.env_idx, self.env_step, :] = input_obs.unsqueeze(1)
-            
 
         #     model_obs = (self.get_inferred_obs()[self.env_idx, self.env_step, :]).squeeze(1)
             
@@ -337,7 +373,8 @@ class Navigator(BaseTask):
         #     priv_obs[:, k+6] = ((priv_obs[:, k+6]) * (1/ 1.7))
         
         # add scaled noise
-        self.obs_buf[:] = torch.cat([obs, priv_obs], dim=-1)
+        self.obs_buf[:] = torch.cat([obs.clone(), priv_obs.clone()], dim=-1)
+        # print(self.obs_buf[0, :2], self.obs_buf[0, 6:])
 
         # self.obs_buf[:] = torch.cat([obs, priv_obs[:, :2], priv_obs[:, 2:3]*0.33, priv_obs[:, 3:4], priv_obs[:, 4:5] * (1/3.14), priv_obs[5:6]], dim=-1)
 
@@ -400,7 +437,9 @@ class Navigator(BaseTask):
         self.reset_buf[env_ids] = False
         self.gs_buf[env_ids] = False
         self.episode_length_buf[env_ids] = 0
-        self.last_actions[env_ids] = 0. 
+        self.last_actions[env_ids] = 0.
+        self.env_step[env_ids] = 0
+        self.priv_info_inp[env_ids, :, :] = 0.
 
         # print(self.goal_positions[env_ids])
 
@@ -424,7 +463,7 @@ class Navigator(BaseTask):
         max_episode_length_s = cfg.env.episode_length_s
         cfg.env.max_episode_length = np.ceil(max_episode_length_s / self.dt)
         self.max_episode_length = cfg.env.max_episode_length
-        self.max_episode_length = 750
+        self.max_episode_length = 749
 
         # cfg.domain_rand.push_interval = np.ceil(cfg.domain_rand.push_interval_s / self.dt)
         # cfg.domain_rand.rand_interval = np.ceil(cfg.domain_rand.rand_interval_s / self.dt)

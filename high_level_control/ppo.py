@@ -190,9 +190,9 @@ class PPO:
                     osm_model.train()
                     osm_optimizer.zero_grad()
                     
-                    decoded_obs, decoded_next_obs, decoded_pred_next_obs, _ = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 10:]], dim=-1), actions_batch, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 10:]], dim=-1))
+                    decoded_obs, decoded_next_obs, decoded_pred_next_obs, _ = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
 
-                    loss = hl_loss_fn(decoded_obs, torch.cat([obs_batch[:, :6], obs_batch[:, 10:]], dim=-1)) + hl_loss_fn(decoded_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 10:]], dim=-1)) + hl_loss_fn(decoded_pred_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 10:]], dim=-1))
+                    loss = hl_loss_fn(decoded_obs, torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1)) + hl_loss_fn(decoded_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1)) + hl_loss_fn(decoded_pred_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
 
                     # out = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch)
                     # loss = hl_loss_fn(out, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))

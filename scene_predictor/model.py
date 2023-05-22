@@ -33,24 +33,35 @@ class GRU(nn.Module):
         return out, hidden
 
 class MiniTransformer(nn.Module):
-    def __init__(self, input_size, output_size, embed_size=512, hidden_size=2048, num_heads=8, max_sequence_length=250, num_layers=6):
+    def __init__(self, input_size, output_size, embed_size=512, hidden_size=2048, num_heads=8, max_sequence_length=250, num_layers=6, estimate_pose=True):
         super(MiniTransformer, self).__init__()
+
+        self.batch_first = True
 
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.linear_in = nn.Linear(input_size, embed_size)
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=embed_size, nhead=num_heads, dim_feedforward=hidden_size, batch_first=True)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=embed_size, nhead=num_heads, dim_feedforward=hidden_size, batch_first=self.batch_first)
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers)
-        self.linear_out = nn.Linear(embed_size, output_size)
+        self.linear_out = nn.Linear(embed_size, embed_size)
+        self.linear_pose = nn.Sequential(nn.Linear(embed_size, 128), nn.ELU(), nn.Linear(128, 6))
+        self.linear_priv_info = nn.Sequential(nn.Linear(embed_size, 128), nn.ELU(), nn.Linear(128, 21))
         self.positonal_embedding = PositionalEncoding(embed_size, max_len=max_sequence_length)
+        self.activation = nn.ELU()
+        self.estimate_pose = estimate_pose
     
     def forward(self, x, src_mask):
         x = self.linear_in(x)
         x = self.positonal_embedding(x)
         x = self.encoder(x, mask=src_mask, )
         x = self.linear_out(x)
-        return x
-
+        x = self.activation(x)
+        if self.estimate_pose:
+            pose = self.linear_pose(x)
+            return torch.cat([pose], dim=-1)
+        else:
+            priv_info = self.linear_priv_info(x)
+            return torch.cat([priv_info], dim=-1)
 class PositionalEncoding(nn.Module):
 
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):

@@ -76,17 +76,18 @@ def main(all_files, dest_path):
         #         np.savez_compressed(f'{final_dest}/data_{ctr}.npz', **new_data)
         #         ctr += 1
 if __name__ == '__main__':
-    data_path1 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_1/')
-    data_path2 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_2/')
-    data_path3 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_3/')
+    data_path1 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/motivation_random_seed_test_8/')
+    data_path2 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/only_random_seed_test_2/')
+    data_path3 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/only_random_seed_test_3/')
 
     print(len(glob.glob(str(data_path1/'*/*.npz'))), len(glob.glob(str(data_path2/'*/*.npz'))), len(glob.glob(str(data_path3/'*/*.npz'))))
 
     # exit()
 
-    all_files = glob.glob(str(data_path1/'*/*.npz')) + glob.glob(str(data_path2/'*/*.npz')) + glob.glob(str(data_path3/'*/*.npz'))
+    # all_files = glob.glob(str(data_path1/'*/*.npz')) + glob.glob(str(data_path2/'*/*.npz')) + glob.glob(str(data_path3/'*/*.npz'))
+    all_files = glob.glob(str(data_path1/'*/*.npz')) # + glob.glob(str(data_path2/'*/*.npz')) + glob.glob(str(data_path3/'*/*.npz'))
     
 
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_1_single_trajectories')
+    dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/motivation_random_seed_test_8_single_trajectories')
     dest_path.mkdir(parents=True, exist_ok=True)
     main(all_files, dest_path)

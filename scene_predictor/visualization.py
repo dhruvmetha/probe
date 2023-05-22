@@ -8,7 +8,7 @@ from matplotlib import animation
 from indep_model.config import *
 FFwriter = animation.FFMpegWriter
 
-def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw):
+def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=False):
 
     patch_set = []
     
@@ -23,34 +23,37 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw):
                 continue
         patch_set.append(pch.Rectangle(pos_rob.cpu().numpy() - np.array([0.588/2, 0.22/2]), width=0.588, height=0.22-0.05, angle=angle_rob.cpu(), rotation_point='center', facecolor='green', label='robot'))
                         
+    if not estimate_pose:
+        for i in range(RECTS):
+            j = i*7 + 2
+            
+            contact = torch.sigmoid(priv_obs[idx][j-2])
+            alpha = 0.3 if contact.item() < 0.5 else 0.8
+            movable = torch.sigmoid(priv_obs[idx][j-1])
 
-    # for i in range(RECTS):
-    #     j = i*7 + 2
-        
-    #     contact = torch.sigmoid(priv_obs[idx][j-2])
-    #     alpha = 0.3 if contact.item() < 0.5 else 0.8
-    #     movable = torch.sigmoid(priv_obs[idx][j-1])
+            pos, pos_pred, pos_fsw = priv_obs[idx][j:j+2], pred[idx][j:j+2], fsw[idx][j:j+2]    
+            angle, angle_pred, angle_fsw = torch.rad2deg(priv_obs[idx][j+2:j+3]), torch.rad2deg(pred[idx][j+2:j+3]), torch.rad2deg(fsw[idx][j+2:j+3])
+            size, size_pred, size_fsw = priv_obs[idx][j+3:j+5], pred[idx][j+3:j+5], fsw[idx][j+3:j+5]
 
-    #     pos, pos_pred, pos_fsw = priv_obs[idx][j:j+2], pred[idx][j:j+2], fsw[idx][j:j+2]    
-    #     angle, angle_pred, angle_fsw = torch.rad2deg(priv_obs[idx][j+2:j+3]), torch.rad2deg(pred[idx][j+2:j+3]), torch.rad2deg(fsw[idx][j+2:j+3])
-    #     size, size_pred, size_fsw = priv_obs[idx][j+3:j+5], pred[idx][j+3:j+5], fsw[idx][j+3:j+5]
+            block_color = 'red'
+            if priv_obs[idx][j-1] == 1:
+                block_color = 'yellow'
 
-    #     block_color = 'red'
-    #     if priv_obs[idx][j-1] == 1:
-    #         block_color = 'yellow'
+            block_color_fsw = 'red'
+            if fsw[idx][j-1] == 1:
+                block_color_fsw = 'yellow'
+            
+            pred_block_color = 'blue'
+            if movable > 0.5:
+                pred_block_color = 'orange'
 
-    #     block_color_fsw = 'red'
-    #     if fsw[idx][j-1] == 1:
-    #         block_color_fsw = 'yellow'
-        
-    #     pred_block_color = 'blue'
-    #     if movable > 0.5:
-    #         pred_block_color = 'orange'
-
-    #     for _ in range(2):
-    #         patch_set.append(pch.Rectangle(pos.cpu() - size.cpu()/2, *(size.cpu()), angle=angle.cpu(), rotation_point='center', facecolor=block_color, label=f'true_mov_{i}'))
-    #         patch_set.append(pch.Rectangle(pos_pred.cpu() - size_pred.cpu()/2, *(size_pred.cpu()), angle=angle_pred.cpu(), rotation_point='center', facecolor=pred_block_color, alpha=alpha, label=f'pred_mov_{i}'))
-    #         patch_set.append(pch.Rectangle(pos_fsw.cpu() - size_fsw.cpu()/2, *(size_fsw.cpu()), angle=angle_fsw.cpu(), rotation_point='center', facecolor=block_color_fsw, label=f'fsw_mov_{i}'))
+            for _ in range(2):
+                patch_set.append(pch.Rectangle(pos.cpu() - size.cpu()/2, *(size.cpu()), angle=angle.cpu(), rotation_point='center', facecolor=block_color, label=f'true_mov_{i}'))
+                if torch.prod(size_pred) > 0.10:
+                    patch_set.append(pch.Rectangle(pos_pred.cpu() - size_pred.cpu()/2, *(size_pred.cpu()), angle=angle_pred.cpu(), rotation_point='center', facecolor=pred_block_color, alpha=alpha, label=f'pred_mov_{i}'))
+                else:
+                    patch_set.append(pch.Rectangle(pos_pred.cpu() - size_pred.cpu()/2, *([0., 0.]), angle=angle_pred.cpu(), rotation_point='center', facecolor=pred_block_color, alpha=alpha, label=f'pred_mov_{i}'))
+                patch_set.append(pch.Rectangle(pos_fsw.cpu() - size_fsw.cpu()/2, *(size_fsw.cpu()), angle=angle_fsw.cpu(), rotation_point='center', facecolor=block_color_fsw, label=f'fsw_mov_{i}'))
 
     return patch_set
 

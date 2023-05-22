@@ -12,7 +12,9 @@ FFwriter = animation.FFMpegWriter
 
 
 RECENT_MODEL = sorted(glob.glob("./scene_predictor/results/*/*"), key=os.path.getmtime)[-1]
-# RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/experiments_real_robot/indep_model_v2/results/transformer_250_2048/2023-04-18_05-08-51'
+# RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/decoupled_inference/1'
+# RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45'
+# RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_750_2048/2023-05-20_15-21-17'
 # print(RECENT_MODEL)
 source_folder = f"{RECENT_MODEL}/plots_eval"
 dest_folder = f"{RECENT_MODEL}/animations_eval"
@@ -59,15 +61,15 @@ def on_new_file(tmp_img_path, save_to=None):
         ax[2].set(xlim=(-1.0, 4.0), ylim=(-1, 1), title='predicted', aspect='auto')
         ax[3].set(xlim=(-1.0, 4.0), ylim=(-1, 1), title='full seen world', aspect='auto')
         
-        # for i in range(RECTS):
-        #     j = i*6 + 5
-        #     ax[0].add_patch(frame[j])
-        #     ax[0].add_patch(frame[j+1])
+        for i in range(RECTS):
+            j = i*6 + 5
+            ax[0].add_patch(frame[j])
+            ax[0].add_patch(frame[j+1])
 
-        #     ax[1].add_patch(frame[j+3])
-        #     ax[2].add_patch(frame[j+4])
+            ax[1].add_patch(frame[j+3])
+            ax[2].add_patch(frame[j+4])
 
-        #     ax[3].add_patch(frame[j+5])
+            ax[3].add_patch(frame[j+5])
         last_patch.extend(frame)
     
     anim = animation.FuncAnimation(fig, animate, frames=patches, interval=10, repeat=False)
@@ -86,7 +88,7 @@ while True:
     if not os.path.exists(source_folder):
         time.sleep(5)
         continue
-    updated_file_list = sorted(glob.glob(f"{source_folder}/*.pkl"), key= lambda x: int(x.split('/')[-1].split('.')[0].split('_')[-1]))[-5:]
+    updated_file_list = sorted(glob.glob(f"{source_folder}/*.pkl"), key= lambda x: int(x.split('/')[-1].split('.')[0].split('_')[-1]))[-10:][::-1]
     print(updated_file_list)
 
     # check for new files

@@ -277,8 +277,7 @@ class Cfg(PrefixProto, cli=False):
     class reward_scales(ParamsProto, cli=False):
 
         # terminal rewards
-        # terminal_distance_gs = 5.0
-        terminal_time_out = -0.2 # -5.0
+        # terminal_distance_gs = 0.0
 
         # step rewards
         # action_energy = -0.1 # -0.1
@@ -301,6 +300,7 @@ class Cfg(PrefixProto, cli=False):
         # zero_velocity = -0.05
         # time = -0.01
 
+        terminal_time_out = -0.2 # -5.0
         terminal_distance_gs = 1.0
         torque_energy = -5e-8
         distance = -5e-6

@@ -1090,7 +1090,7 @@ class LeggedRobot():
         go1_ids_int32 = torch.tensor([self.gym.find_actor_index(self.envs[i.item()], 'go1', gymapi.DOMAIN_SIM) for i in env_ids], dtype=torch.long, device=self.device)
 
         random_base_pos = torch.zeros_like(self.all_root_states[go1_ids_int32]) + self.base_init_state
-        random_pos = True
+        random_pos = False
         self.goal_positions[env_ids] = 3.5
         if random_pos:
             # choose half of the go1_ids_int32 at random((self.all_root_states[go1_ids_int32] > 1.5).float()) * (-0.2)

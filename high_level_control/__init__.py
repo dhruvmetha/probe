@@ -83,12 +83,12 @@ class Runner:
         # one_step_models = None
         # ll_one_step_models = None
 
-        if RunnerArgs.resume:
+        if RunnerArgs.resume or True:
             # load pretrained weights from resume_path
             # from ml_logger import ML_Logger
             # loader = ML_Logger(root="http://escher.csail.mit.edu:8080",
             #                    prefix=RunnerArgs.resume_path)
-            weights = logger.load_torch("checkpoints/ac_weights_last.pt")
+            weights = torch.load("/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-05-19/navigator_train/224119.579254/checkpoints/ac_weights_last.pt")
             actor_critic.load_state_dict(state_dict=weights)
 
             # if hasattr(self.env, "curricula") and RunnerArgs.resume_curriculum:
@@ -162,7 +162,7 @@ class Runner:
                     intrinsic_reward = 0.
                     if len(self.alg.one_step_models) > 0:
                     # compute intrinsic reward
-                        latents = [osm.transition(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 10:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
+                        latents = [osm.transition(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 9:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
 
                         # latents = [osm(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 9:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
                         # latents = [osm(self.alg.actor_critic.get_latent(obs_history[:num_train_envs], privileged_obs[:num_train_envs]), actions_train) for osm in self.alg.one_step_models]

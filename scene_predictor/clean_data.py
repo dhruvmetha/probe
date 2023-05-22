@@ -13,9 +13,11 @@ if __name__ == '__main__':
     # val_files = glob('/common/users/dm1487/legged_manipulation/rollout_data/no_exploration_1_single_trajectories/*/*.npz')
 
     # files = val_files
-    # # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_6_single_trajectories1')
-    # # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_3_single_trajectories1')
-    # # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1')
+    # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_6_single_trajectories1')
+    # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_3_single_trajectories1')
+    # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1')
+
+    # files = sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data_1/only_random_seed_test_1_single_trajectories/*/*.npz'))
     # ctr = 0
     # data_ctr = {
     #     0: [],
@@ -33,19 +35,19 @@ if __name__ == '__main__':
     #         print(file)
     
     # print(len(data_ctr[0]), len(data_ctr[1]), len(data_ctr[2]), len(data_ctr[3]))
-    # with open('./scene_predictor/data_ctr_5_val.pkl', 'wb') as f:
+    # with open('./scene_predictor/data_ctr_7_priv_info.pkl', 'wb') as f:
     #     pickle.dump(data_ctr, f)
 
-    with open('./scene_predictor/data_ctr_5_val.pkl', 'rb') as f:
+    with open('./scene_predictor/data_ctr_7_priv_info.pkl', 'rb') as f:
         data_ctr = pickle.load(f)
     
 
     balanced_data = []
     # balanced_data += data_ctr[0]
     for i in range(0, 3):
-        balanced_data += data_ctr[i][:1000]
+        balanced_data += data_ctr[i][:17492]
     
     print(len(balanced_data))
-    with open('./scene_predictor/balanced_data_5_val.pkl', 'wb') as f:
+    with open('./scene_predictor/balanced_data_7_priv_info.pkl', 'wb') as f:
         pickle.dump(balanced_data, f)
         
