@@ -22,14 +22,20 @@ class CoRLRewards:
     def _reward_terminal_time_out(self):
         return (self.env.time_out_buf & ~self.env.gs_buf) * 1.0
 
+    def _reward_terminal_distance_travelled(self):
+        return ((1/torch.exp(self.env.distance_travelled)) * (self.env.gs_buf * 1.0))/0.0018
+
     def _reward_torque_energy(self):
         return torch.sum(torch.square(self.env.legged_env.torques), dim=-1)
 
     def _reward_action_energy(self):
         return torch.sum(torch.square((torch.abs(self.env.actions) > 0.3) * self.env.actions), dim=-1)
-
-        # return torch.sum(torch.square(self.env.actions), dim=-1)
-        # return torch.sum(torch.square(self.env.actions), dim=-1)
+    
+    def _reward_terminal_time_taken(self):
+        return (1 - (self.env.episode_length_buf/1500)) * (self.env.gs_buf * 1.0)
+        
+    def _reward_terminal_num_collisions(self):
+        return (1 - (self.env.legged_env.num_collisions/(3000))) * (self.env.gs_buf * 1.0)
 
     def _reward_time(self):
         return torch.ones(self.env.num_envs, device=self.env.device)
@@ -60,6 +66,25 @@ class CoRLRewards:
         return torch.square(self.env.legged_env.torques).sum(dim=-1)
 
     def _reward_distance(self):
-        return torch.norm(self.env.base_pos[:, 0] - self.env.goal_positions, dim=-1)
+        # abs(2.0 - 3.5)
+        # return torch.abs(self.env.goal_positions - self.env.base_pos[:, 0])
+        r = torch.zeros_like(self.env.base_pos[:, 0])
+        r = (self.env.goal_positions - self.env.base_pos[:, 0])
+        return r
+
+        r = torch.zeros_like(self.env.base_pos[:, 0])
+        r[self.env.base_pos[:, 0] < 0.0] = self.env.base_pos[self.env.base_pos[:, 0] < 0.0, 0]
+        r[self.env.base_pos[:, 0] >= 0.0] = torch.exp(self.env.base_pos[self.env.base_pos[:, 0] >= 0.0, 0])/torch.exp(self.env.goal_positions[self.env.base_pos[:, 0] >= 0.0])
+        # print(self.env.base_pos[0, 0], r[0])
+        return r # self.env.base_pos[:, 0]
+
+    def _reward_norm_distance(self):
+        # print(self.env.goal_positions)
+        normalized_location = torch.clamp((((self.env.goal_positions - self.env.base_pos[:, 0])/4.0)), min=0., max=1.)
+
+        # print(self.env.base_pos[0, 0], (1 - (normalized_location ** 0.4))[0], normalized_location[0])
+        # print(normalized_location[0], (1 - (normalized_location ** 0.4))[0])
+        # print(1/torch.exp(torch.abs(self.env.base_pos[:, 0] - self.env.goal_positions))[0], 1 - (normalized_location ** 0.4)[0])
+        return 1 - (normalized_location ** 0.4)
 
     

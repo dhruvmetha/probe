@@ -5,42 +5,55 @@ from pathlib import Path
 from matplotlib import patches as pch
 from matplotlib import pyplot as plt
 from matplotlib import animation
-from indep_model.config import *
+# from indep_model.config import *
 FFwriter = animation.FFMpegWriter
-
+RECTS = 3
 def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=False):
+
+    obs = obs.cpu()
+    pred_obs = pred_obs.cpu()
+    pred = pred.cpu()
+    priv_obs = priv_obs.cpu()
 
     patch_set = []
     
-    pos_rob, angle_rob = obs[idx, :2], torch.rad2deg(obs[idx, 3:4])
-    pred_pos_rob, pred_angle_rob = pred_obs[idx, :2], torch.rad2deg(pred_obs[idx, 3:4])
-    # angle_rob = torch.rad2deg(torch.atan2(2.0*(rot_rob[0]*rot_rob[1] + rot_rob[3]*rot_rob[2]), 1. - 2.*(rot_rob[1]*rot_rob[1] + rot_rob[2]*rot_rob[2])))
+    pos_rob, angle_rob = obs[idx, :2].numpy(), torch.rad2deg(obs[idx, 2:3]).numpy()
+    pred_pos_rob, pred_angle_rob = pred_obs[idx, :2].numpy(), torch.rad2deg(pred_obs[idx, 2:3]).numpy()
 
     for t_idx in range(4):
         if (t_idx == 2) or (t_idx == 0):
-            patch_set.append(pch.Rectangle(pred_pos_rob.cpu().numpy() - np.array([0.588/2, 0.22/2]), width=0.588, height=0.22-0.05, angle=pred_angle_rob.cpu(), rotation_point='center', facecolor='black', label='pred_robot', alpha=0.5))
+            patch_set.append(pch.Rectangle(pred_pos_rob - np.array([0.588/2, 0.22/2]), width=0.588, height=0.22-0.05, angle=pred_angle_rob, rotation_point='center', facecolor='black', label='pred_robot', alpha=0.5))
             if t_idx == 2:
                 continue
-        patch_set.append(pch.Rectangle(pos_rob.cpu().numpy() - np.array([0.588/2, 0.22/2]), width=0.588, height=0.22-0.05, angle=angle_rob.cpu(), rotation_point='center', facecolor='green', label='robot'))
+        patch_set.append(pch.Rectangle(pos_rob - np.array([0.588/2, 0.22/2]), width=0.588, height=0.22-0.05, angle=angle_rob, rotation_point='center', facecolor='green', label='robot'))
                         
+
+    # print(estimate_pose)
     if not estimate_pose:
         for i in range(RECTS):
-            j = i*7 + 2
+            fsw_j = i*7 + 2
+            j = i*8 + 3
             
-            contact = torch.sigmoid(priv_obs[idx][j-2])
-            alpha = 0.3 if contact.item() < 0.5 else 0.8
-            movable = torch.sigmoid(priv_obs[idx][j-1])
+            confidence = torch.sigmoid(pred[idx][j-3]).item()
+            contact = torch.sigmoid(pred[idx][j-2])
+            # alpha = 0.3 if contact.item() < 0.5 else 0.8
+            movable = torch.sigmoid(pred[idx][j-1])
 
-            pos, pos_pred, pos_fsw = priv_obs[idx][j:j+2], pred[idx][j:j+2], fsw[idx][j:j+2]    
-            angle, angle_pred, angle_fsw = torch.rad2deg(priv_obs[idx][j+2:j+3]), torch.rad2deg(pred[idx][j+2:j+3]), torch.rad2deg(fsw[idx][j+2:j+3])
-            size, size_pred, size_fsw = priv_obs[idx][j+3:j+5], pred[idx][j+3:j+5], fsw[idx][j+3:j+5]
+            pos, pos_pred, pos_fsw = priv_obs[idx][j:j+2], pred[idx][j:j+2], fsw[idx][fsw_j:fsw_j+2]
+
+            angle, angle_pred, angle_fsw = torch.rad2deg(priv_obs[idx][j+2:j+3]).numpy(), torch.rad2deg(pred[idx][j+2:j+3]).numpy(), torch.rad2deg(fsw[idx][fsw_j+2:fsw_j+3]).numpy()
+
+            size, size_pred, size_fsw = priv_obs[idx][j+3:j+5], pred[idx][j+3:j+5], fsw[idx][fsw_j+3:fsw_j+5]
+
+            pos, pos_pred, pos_fsw = pos.numpy(), pos_pred.numpy(), pos_fsw.numpy()
+            size, size_pred, size_fsw = size.numpy(), size_pred.numpy(), size_fsw.numpy()
 
             block_color = 'red'
             if priv_obs[idx][j-1] == 1:
                 block_color = 'yellow'
 
             block_color_fsw = 'red'
-            if fsw[idx][j-1] == 1:
+            if fsw[idx][fsw_j-1] == 1:
                 block_color_fsw = 'yellow'
             
             pred_block_color = 'blue'
@@ -48,12 +61,17 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
                 pred_block_color = 'orange'
 
             for _ in range(2):
-                patch_set.append(pch.Rectangle(pos.cpu() - size.cpu()/2, *(size.cpu()), angle=angle.cpu(), rotation_point='center', facecolor=block_color, label=f'true_mov_{i}'))
-                if torch.prod(size_pred) > 0.10:
-                    patch_set.append(pch.Rectangle(pos_pred.cpu() - size_pred.cpu()/2, *(size_pred.cpu()), angle=angle_pred.cpu(), rotation_point='center', facecolor=pred_block_color, alpha=alpha, label=f'pred_mov_{i}'))
+                patch_set.append(pch.Rectangle(pos - size/2, *(size), angle=angle, rotation_point='center', facecolor=block_color, label=f'true_mov_{i}'))
+
+                if True or np.prod(size_pred) > 0.05:
+                    
+                    patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *(size_pred), angle=angle_pred, rotation_point='center', facecolor=pred_block_color,  label=f'pred_mov_{i}'))
+
                 else:
-                    patch_set.append(pch.Rectangle(pos_pred.cpu() - size_pred.cpu()/2, *([0., 0.]), angle=angle_pred.cpu(), rotation_point='center', facecolor=pred_block_color, alpha=alpha, label=f'pred_mov_{i}'))
-                patch_set.append(pch.Rectangle(pos_fsw.cpu() - size_fsw.cpu()/2, *(size_fsw.cpu()), angle=angle_fsw.cpu(), rotation_point='center', facecolor=block_color_fsw, label=f'fsw_mov_{i}'))
+                    patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *([0., 0.]), angle=angle_pred, rotation_point='center', facecolor=pred_block_color,  label=f'pred_mov_{i}'))
+                
+                patch_set.append(pch.Rectangle(pos_fsw - size_fsw/2, *(size_fsw), angle=angle_fsw, rotation_point='center', facecolor=block_color_fsw, label=f'fsw_mov_{i}'))
+                
 
     return patch_set
 

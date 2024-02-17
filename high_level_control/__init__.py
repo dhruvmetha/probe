@@ -50,16 +50,16 @@ class RunnerArgs(PrefixProto, cli=False):
     max_iterations = 1500  # number of policy updates
 
     # logging
-    save_interval = 100  # check for potential saves every this many iterations
-    save_video_interval = 60
-    log_freq = 10
+    save_interval = 200  # check for potential saves every this many iterations
+    save_video_interval = 100
+    log_freq = 60
 
     # load and resume
     resume = False
     load_run = -1  # -1 = last run
     checkpoint = -1  # -1 = last saved model
-    resume_path = None  # updated from load_run and chkpt
-    resume_curriculum = True
+    resume_path = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-09-14/navigator_train/045600.557505'  # updated from load_run and chkpt
+    resume_curriculum = False
 
 
 class Runner:
@@ -78,17 +78,21 @@ class Runner:
 
         # hl_one_step_models = [OneStepModel(27, self.env.num_actions, 27).to(self.device) for i in range(10)]
         hl_one_step_models = None
-        # hl_one_step_models = [OneStep(27, self.env.num_actions, 8).to(self.device) for i in range(5)]
+        # hl_one_step_models = [OneStep(27, self.env.num_actions, 8).to(self.device) for i in range(10)]
         # ll_one_step_models = [OneStepModel(70, self.env.num_actions, 70).to(self.device) for i in range(10)]
         # one_step_models = None
         # ll_one_step_models = None
 
-        if RunnerArgs.resume or True:
+        if RunnerArgs.resume:
             # load pretrained weights from resume_path
             # from ml_logger import ML_Logger
             # loader = ML_Logger(root="http://escher.csail.mit.edu:8080",
             #                    prefix=RunnerArgs.resume_path)
-            weights = torch.load("/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-05-19/navigator_train/224119.579254/checkpoints/ac_weights_last.pt")
+            # weights = torch.load("/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-05-22/navigator_train/043506.747887/checkpoints/ac_weights_last.pt")
+            # weights = torch.load("/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-05-23/navigator_train/052500.669242/checkpoints/ac_weights_last.pt")
+            # weights = torch.load("/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-05-25/navigator_train/211446.471194/checkpoints/ac_weights_last.pt")
+            # weights = torch.load("/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-06-05/navigator_train/220208.270068/checkpoints/ac_weights_last.pt")
+            weights = torch.load(f"{RunnerArgs.resume_path}/checkpoints/ac_weights_last.pt")
             actor_critic.load_state_dict(state_dict=weights)
 
             # if hasattr(self.env, "curricula") and RunnerArgs.resume_curriculum:
@@ -132,6 +136,7 @@ class Runner:
         obs, privileged_obs, obs_history = obs_dict["obs"], obs_dict["privileged_obs"], obs_dict["obs_history"]
         obs, privileged_obs, obs_history = obs.to(self.device), privileged_obs.to(self.device), obs_history.to(
             self.device)
+        last_critic_obs, last_critic_privileged_obs = torch.zeros_like(obs_history), torch.zeros_like(privileged_obs)
         self.alg.actor_critic.train()  # switch to train mode (for dropout for example)
 
         rewbuffer = deque(maxlen=100)
@@ -142,12 +147,14 @@ class Runner:
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         ep_intrinsic_reward = torch.zeros(self.env.num_train_envs, dtype=torch.float, device=self.device)
 
+        self.env.start_recording()
+
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in tqdm(range(self.current_learning_iteration, tot_iter)):
-            start = time.time()
             # Rollout
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
+                    start = time.time()
                     actions_train = self.alg.act(obs[:num_train_envs], privileged_obs[:num_train_envs], obs_history[:num_train_envs])
                     # self.alg.add_low_level_obs(self.env.get_low_level_obs()['obs'][:num_train_envs])
 
@@ -159,26 +166,9 @@ class Runner:
 
                     actions_eval = self.alg.actor_critic.act(obs_history[num_train_envs:], privileged_obs[num_train_envs:])
                     
-                    intrinsic_reward = 0.
-                    if len(self.alg.one_step_models) > 0:
-                    # compute intrinsic reward
-                        latents = [osm.transition(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 9:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
-
-                        # latents = [osm(torch.cat([obs[:num_train_envs, :6], obs[:num_train_envs, 9:]], dim=-1), actions_train) for osm in self.alg.one_step_models]
-                        # latents = [osm(self.alg.actor_critic.get_latent(obs_history[:num_train_envs], privileged_obs[:num_train_envs]), actions_train) for osm in self.alg.one_step_models]
-                        # print(torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1).shape)
-                        intrinsic_reward_scale = 0.01 * self.env.dt
-                        intrinsic_reward = torch.mean(torch.var(torch.stack(latents), dim=0), dim=-1)
-                        # print(intrinsic_reward[0])
-                        intrinsic_reward =  torch.clamp(intrinsic_reward, min=0., max=1.) * intrinsic_reward_scale
-                        if 'intrinsic' not in self.env.episode_sums:
-                            self.env.episode_sums['intrinsic'] = 0.
-                        self.env.episode_sums['intrinsic'] += intrinsic_reward
-
 
                     ret = self.env.step(torch.cat((actions_train, actions_eval), dim=0))
                     obs_dict, rewards, dones, infos = ret
-                    
 
                     obs, privileged_obs, obs_history = obs_dict["obs"], obs_dict["privileged_obs"], obs_dict[
                         "obs_history"]
@@ -186,7 +176,6 @@ class Runner:
                     obs, privileged_obs, obs_history, rewards, dones = obs.to(self.device), privileged_obs.to(
                         self.device), obs_history.to(self.device), rewards.to(self.device), dones.to(self.device)
 
-                    rewards[:num_train_envs] += intrinsic_reward
                     self.alg.process_env_step(obs[:num_train_envs], rewards[:num_train_envs], dones[:num_train_envs], infos)
 
                     if 'train/episode' in infos:
@@ -219,23 +208,16 @@ class Runner:
                     if 'curriculum/distribution' in infos:
                         distribution = infos['curriculum/distribution']
 
+                    last_critic_obs[:num_train_envs, :], last_critic_privileged_obs[:num_train_envs, :] = obs_history[:num_train_envs, :], privileged_obs[:num_train_envs][:, :]
                     
-                    done_env_ids = dones[:num_train_envs].nonzero(as_tuple=False).flatten()
+                    done_env_ids = dones.nonzero(as_tuple=False).flatten()
                     if len(done_env_ids) > 0:
-                        ep_intrinsic_reward[done_env_ids] = 0.
-
-                    # self.env.compute_observations()
-
-                stop = time.time()
-                collection_time = stop - start
-
-                # Learning step
-                start = stop
-                self.alg.compute_returns(obs_history[:num_train_envs], privileged_obs[:num_train_envs])
-
-
+                        # ep_intrinsic_reward[done_env_ids] = 0.
+                        obs_history[done_env_ids] = 0.
+                        # print(obs_history[done_env_ids[0], -16:])
 
                 
+                self.alg.compute_returns(obs_history[:num_train_envs], privileged_obs[:num_train_envs])
 
                 # if it % curriculum_dump_freq == 0:
                 #     logger.save_pkl({"iteration": it,
@@ -248,23 +230,14 @@ class Runner:
                 #                          "distribution": distribution},
                 #                          path=f"curriculum/distribution.pkl", append=True)
 
-            mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student, mean_osm_loss = self.alg.update()
-            stop = time.time()
-            learn_time = stop - start
+            # Learning step
+            mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student = self.alg.update()
 
             logger.store_metrics(
-                # total_time=learn_time - collection_time,
                 time_elapsed=logger.since('start'),
                 time_iter=logger.split('epoch'),
-                adaptation_loss=mean_adaptation_module_loss,
                 mean_value_loss=mean_value_loss,
                 mean_surrogate_loss=mean_surrogate_loss,
-                mean_decoder_loss=mean_decoder_loss,
-                mean_decoder_loss_student=mean_decoder_loss_student,
-                mean_decoder_test_loss=mean_decoder_test_loss,
-                mean_decoder_test_loss_student=mean_decoder_test_loss_student,
-                mean_adaptation_module_test_loss=mean_adaptation_module_test_loss,
-                mean_osm_loss = mean_osm_loss
             )
 
             if RunnerArgs.save_video_interval:
@@ -291,13 +264,13 @@ class Runner:
                     # traced_script_adaptation_module.save(adaptation_module_path)
                     # logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/", once=False)
 
-                    body_path = f'{path}/body_latest.jit'
-                    body_model = copy.deepcopy(torch.nn.Sequential(self.alg.actor_critic.shared_memory, self.alg.actor_critic.actor)).to('cpu')
-                    # body_model = copy.deepcopy(self.alg.actor_critic.actor).to('cpu')
-                    traced_script_body_module = torch.jit.script(body_model)
-                    traced_script_body_module.save(body_path)
+                    # body_path = f'{path}/body_latest.jit'
+                    # body_model = copy.deepcopy(torch.nn.Sequential(self.alg.actor_critic.shared_memory, self.alg.actor_critic.actor)).to('cpu')
+                    # # body_model = copy.deepcopy(self.alg.actor_critic.actor).to('cpu')
+                    # traced_script_body_module = torch.jit.script(body_model)
+                    # traced_script_body_module.save(body_path)
 
-                    logger.upload_file(file_path=body_path, target_path=f"checkpoints/", once=False)
+                    # logger.upload_file(file_path=body_path, target_path=f"checkpoints/", once=False)
 
             self.current_learning_iteration += num_learning_iterations
 
@@ -309,27 +282,27 @@ class Runner:
 
             os.makedirs(path, exist_ok=True)
 
-            adaptation_module_path = f'{path}/adaptation_module_latest.jit'
-            adaptation_module = copy.deepcopy(self.alg.actor_critic.adaptation_module).to('cpu')
-            traced_script_adaptation_module = torch.jit.script(adaptation_module)
-            traced_script_adaptation_module.save(adaptation_module_path)
+            # adaptation_module_path = f'{path}/adaptation_module_latest.jit'
+            # adaptation_module = copy.deepcopy(self.alg.actor_critic.adaptation_module).to('cpu')
+            # traced_script_adaptation_module = torch.jit.script(adaptation_module)
+            # traced_script_adaptation_module.save(adaptation_module_path)
 
             body_path = f'{path}/body_latest.jit'
-            body_model = copy.deepcopy(self.alg.actor_critic.actor_body).to('cpu')
+            body_model = copy.deepcopy(self.alg.actor_critic.shared_memory, self.alg.actor_critic.actor).to('cpu')
             traced_script_body_module = torch.jit.script(body_model)
             traced_script_body_module.save(body_path)
 
-            logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/", once=False)
+            # logger.upload_file(file_path=adaptation_module_path, target_path=f"checkpoints/", once=False)
             logger.upload_file(file_path=body_path, target_path=f"checkpoints/", once=False)
 
 
     def log_video(self, it):
-        if it - self.last_recording_it >= RunnerArgs.save_video_interval:
-            self.env.start_recording()
-            if self.env.num_eval_envs > 0:
-                self.env.start_recording_eval()
-            print("START RECORDING")
-            self.last_recording_it = it
+        # if it - self.last_recording_it >= RunnerArgs.save_video_interval:
+        #     self.env.start_recording()
+        #     if self.env.num_eval_envs > 0:
+        #         self.env.start_recording_eval()
+        #     print("START RECORDING")
+        #     self.last_recording_it = it
 
         frames = self.env.get_complete_frames()
         if len(frames) > 0:
@@ -337,12 +310,15 @@ class Runner:
             print("LOGGING VIDEO")
             logger.save_video(frames, f"videos/{it:05d}.mp4", fps=1 / self.env.dt)
 
-        if self.env.num_eval_envs > 0:
-            frames = self.env.get_complete_frames_eval()
-            if len(frames) > 0:
-                self.env.pause_recording_eval()
-                print("LOGGING EVAL VIDEO")
-                logger.save_video(frames, f"videos/{it:05d}_eval.mp4", fps=1 / self.env.dt)
+            self.env.start_recording()
+            print("START RECORDING")
+
+        # if self.env.num_eval_envs > 0:
+        #     frames = self.env.get_complete_frames_eval()
+        #     if len(frames) > 0:
+        #         self.env.pause_recording_eval()
+        #         print("LOGGING EVAL VIDEO")
+        #         logger.save_video(frames, f"videos/{it:05d}_eval.mp4", fps=1 / self.env.dt)
 
     # def get_inference_policy(self, device=None):
     #     self.alg.actor_critic.eval()  # switch to evaluation mode (dropout for example)

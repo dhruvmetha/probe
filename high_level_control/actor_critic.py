@@ -16,6 +16,62 @@ class AC_Args(PrefixProto, cli=False):
     use_decoder = False
 
 
+class PrivilegedFeatures(nn.Module):
+    def __init__(self, input_size, output_size):
+        super().__init__()
+        self.input_size = input_size
+        self.output_size = output_size
+
+        self.fc = nn.Sequential(
+            nn.Linear(input_size, 128),
+            nn.ELU(),
+            nn.Linear(128, 64),
+            nn.ELU(),
+            nn.Linear(64, output_size),
+        )
+
+    def forward(self, x):
+        return self.fc(x)
+
+# class Actor(nn.Module):
+#     def __init__(self, input_size, output_size):
+#         super().__init__()
+#         self.input_size = input_size
+#         self.output_size = output_size
+
+#         self.fc = nn.Sequential(
+#             nn.Linear(input_size, 512),
+#             nn.ELU(),
+#             nn.Linear(512, 256),
+#             nn.ELU(),
+#             nn.Linear(256, 128),
+#             nn.ELU(),
+#             nn.Linear(128, output_size),
+#             nn.Tanh()
+#         )
+
+#     def forward(self, x):
+#         return self.fc(x)
+
+# class Critic(nn.Module):
+#     def __init__(self, input_size, output_size):
+#         super().__init__()
+#         self.input_size = input_size
+#         self.output_size = output_size
+
+#         self.fc = nn.Sequential(
+#             nn.Linear(input_size, 512),
+#             nn.ELU(),
+#             nn.Linear(512, 256),
+#             nn.ELU(),
+#             nn.Linear(256, 128),
+#             nn.ELU(),
+#             nn.Linear(128, output_size),
+#         )
+    
+#     def forward(self, x):
+#         return self.fc(x)
+    
 class Actor(nn.Module):
     def __init__(self, input_size, output_size):
         super().__init__()
@@ -23,13 +79,13 @@ class Actor(nn.Module):
         self.output_size = output_size
 
         self.fc = nn.Sequential(
-            nn.Linear(input_size, 512),
+            nn.Linear(input_size, 4096),
             nn.ELU(),
-            nn.Linear(512, 256),
+            nn.Linear(4096, 2048),
             nn.ELU(),
-            nn.Linear(256, 128),
+            nn.Linear(2048, 512),
             nn.ELU(),
-            nn.Linear(128, output_size),
+            nn.Linear(512, output_size),
             nn.Tanh()
         )
 
@@ -43,17 +99,18 @@ class Critic(nn.Module):
         self.output_size = output_size
 
         self.fc = nn.Sequential(
-            nn.Linear(input_size, 512),
+            nn.Linear(input_size, 4096),
             nn.ELU(),
-            nn.Linear(512, 256),
+            nn.Linear(4096, 2048),
             nn.ELU(),
-            nn.Linear(256, 128),
+            nn.Linear(2048, 512),
             nn.ELU(),
-            nn.Linear(128, output_size),
+            nn.Linear(512, output_size),
         )
     
     def forward(self, x):
         return self.fc(x)
+
 
 
 class SharedLayers(nn.Module):
@@ -85,7 +142,8 @@ class ActorCritic(nn.Module):
         self.output_size = num_actions
 
         self.shared_memory =  SharedLayers(self.input_size, 256)
-        self.actor = Actor(self.input_size, self.output_size)
+        self.privileged_features = PrivilegedFeatures(21, 8)
+        self.actor = Actor(self.input_size , self.output_size)
         self.critic = Critic(self.input_size, 1)
 
         # Action noise
@@ -96,6 +154,8 @@ class ActorCritic(nn.Module):
 
     def act_evaluate(self, observations, privileged_obs, **kwargs):
         # state = self.shared_memory(torch.cat([observations], dim=-1))
+        # state = observations[:, :3]
+        # state = torch.cat([state, self.privileged_features(observations[:, 3:])], dim=-1)
         state = observations
         self.update_distribution(state)
         value = self.critic(state)
@@ -107,12 +167,16 @@ class ActorCritic(nn.Module):
 
     def act(self, observations, privileged_obs, **kwargs):
         # state = self.shared_memory(torch.cat([observations], dim=-1))
+        # state = observations[:, :3]
+        # state = torch.cat([state, self.privileged_features(observations[:, 3:])], dim=-1)
         state = observations
         self.update_distribution(state)
         return self.distribution.sample()
         
     def evaluate(self, observations, privileged_obs, **kwargs):
         # state = self.shared_memory(torch.cat([observations], dim=-1))
+        # state = observations[:, :3]
+        # state = torch.cat([state, self.privileged_features(observations[:, 3:])], dim=-1)
         state = observations
         return self.critic(state)
 
@@ -121,6 +185,8 @@ class ActorCritic(nn.Module):
 
     def act_inference(self, observations, privileged_obs, **kwargs):
         # state = self.shared_memory(torch.cat([observations], dim=-1))
+        # state = observations[:, :3]
+        # state = torch.cat([state, self.privileged_features(observations[:, 3:])], dim=-1)
         state = observations
         return self.actor(state)
 

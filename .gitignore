@@ -68,6 +68,8 @@ docker/rsc
 *.jit
 tmp
 *.tar
+*.zip
+*.pkl
 
 wandb/
 dhruv/
@@ -75,5 +77,5 @@ data_ctr.pkl
 data_ctr_*.pkl
 scene_predictor/balanced_data.pkl
 scene_predictor/balanced_data_*.pkl
-scene_predictor/results
+scene_predictor/results*
 scene_predictor/decoupled_inference

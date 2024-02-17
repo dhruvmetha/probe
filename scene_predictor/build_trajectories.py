@@ -15,11 +15,20 @@ def build_traj(files, dest_path):
             for i in tqdm(range(data['input'].shape[0])):
                 new_data = {
                     'input': data['input'][i],
-                    'target': data['target'][i],
-                    'torques': data['torques'][i],
+                    'll_actions': data['ll_actions'][i],
                     'actions': data['actions'][i],
+                    'target': data['target'][i],
+                    'target_env': data['target_env'][i],
                     'fsw': data['fsw'][i],
                     'done': data['done'][i],
+
+                    # 'input': self.input_data[env_ids].clone().cpu(), # dof_pos, dof_vel, torques_applied
+                    # 'll_actions': self.ll_actions_data[env_ids].clone().cpu(), # ll_actions
+                    # 'actions': self.actions_data[env_ids].clone().cpu(), # actions
+                    # 'target': self.target_data[env_ids].clone().cpu(), # base_pos, base_ang, base_lin_vel, base_ang_vel
+                    # 'target_env': self.target_env_data[env_ids].clone().cpu(), 
+                    # 'fsw': self.fsw_data[env_ids].clone().cpu(),
+                    # 'done': self.done_data[env_ids].clone().cpu(),
                 }
             
                 np.savez_compressed(f'{dest_path}/data_{ctr}.npz', **new_data)
@@ -29,7 +38,7 @@ def build_traj(files, dest_path):
             ctr += 1
 
 def main(all_files, dest_path):
-    num_workers = 24
+    num_workers = 40
     # all_files = glob.glob(str(data_path/'*/*.npz'))
     print(len(all_files))
 
@@ -62,32 +71,23 @@ def main(all_files, dest_path):
     for worker in workers:
         worker.join()
 
-        # for f in tqdm(sorted(glob.glob(folders+'/*.npz'))[:-1]):
-        #     data = np.load(f)
-        #     for i in range(data['input'].shape[0]):
-        #         new_data = {
-        #             'input': data['input'][i],
-        #             'target': data['target'][i],
-        #             'actions': data['actions'][i],
-        #             'fsw': data['fsw'][i],
-        #             'done': data['done'][i],
-        #         }
-                
-        #         np.savez_compressed(f'{final_dest}/data_{ctr}.npz', **new_data)
-        #         ctr += 1
+        
+
 if __name__ == '__main__':
-    data_path1 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/motivation_random_seed_test_8/')
-    data_path2 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/only_random_seed_test_2/')
-    data_path3 = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/only_random_seed_test_3/')
+    import random
+    # id = 0
+    # all_files = glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/final_illus/*/*.npz") # + glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/sep16/*lag_6*/*/*.npz")
+    # all_files = glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/final_illus/*/*.npz") # + glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/sep16/*lag_6*/*/*.npz")
+    # SEED = 20
+    all_files = glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/iros24/*/*/*/*.npz") # + glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/sep16/*lag_6*/*/*.npz")
 
-    print(len(glob.glob(str(data_path1/'*/*.npz'))), len(glob.glob(str(data_path2/'*/*.npz'))), len(glob.glob(str(data_path3/'*/*.npz'))))
-
+    # print(len(all_files))
     # exit()
-
-    # all_files = glob.glob(str(data_path1/'*/*.npz')) + glob.glob(str(data_path2/'*/*.npz')) + glob.glob(str(data_path3/'*/*.npz'))
-    all_files = glob.glob(str(data_path1/'*/*.npz')) # + glob.glob(str(data_path2/'*/*.npz')) + glob.glob(str(data_path3/'*/*.npz'))
     
+    small_set = []
+    small_set += all_files
+    random.shuffle(small_set)
 
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/motivation_random_seed_test_8_single_trajectories')
+    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/all_data')
     dest_path.mkdir(parents=True, exist_ok=True)
-    main(all_files, dest_path)
+    main(small_set, dest_path)

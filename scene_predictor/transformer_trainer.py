@@ -37,15 +37,15 @@ val_batch_size = 32
 test_batch_size = 2
 learning_rate = 1e-4
 dropout = 0.
-input_size = 12 + 27 + 6
-output_size = 24 + 6 + 21 # 27
 train_test_split = 0.95
-estimate_pose = False
+estimate_pose = True
+input_size = 27 if estimate_pose else 12 + 3 + 12 + 12 + 6 
+output_size = 24 + 6 + 21 # 27
 # RECTS = 2
 
 # wandb.init(project='scene_predictor_v1', name=f'{alg}_{sequence_length}_{hidden_state_size}')
 
-SAVE_FOLDER = Path(f'./scene_predictor/results/{alg}_{sequence_length}_{hidden_state_size}/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}')
+SAVE_FOLDER = Path(f'./scene_predictor/results_{"pose" if estimate_pose else "priv_info"}/{alg}_{sequence_length}_{hidden_state_size}/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}')
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
 PLOT_FOLDER = 'plots'
 CHECKPOINT_FOLDER = 'checkpoints'
@@ -53,18 +53,32 @@ path = SAVE_FOLDER/f'{CHECKPOINT_FOLDER}'
 path.mkdir(parents=True, exist_ok=True)
 saved_model_idx = 0
 
-with open('./scene_predictor/balanced_data_7_priv_info.pkl', 'rb') as f:
-    balanced_data = pickle.load(f)
+################
+# with open(f'./scene_predictor/balanced_data_7{"" if estimate_pose else "_priv_info"}.pkl', 'rb') as f:
+#     balanced_data = pickle.load(f)
 
-# with open('./scene_predictor/balanced_data_5_val.pkl', 'rb') as f:
-#     val_balanced_data = pickle.load(f)
+# if not estimate_pose:
+#     balanced_data = []
+    
+# balanced_data += glob('/common/users/dm1487/legged_manipulation/rollout_data_1/final_random_seed_data_1_single_trajectories/*/*.npz')
+######################
+    # balanced_data += glob('/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_1_single_trajectories/*/*.npz')
+# else:
+
+# balanced_data = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/2_obs/2/*/*.npz')
+# balanced_data = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/2_obs/4/*/*.npz')
+
+# clean_data_folder = Path('/common/users/dm1487/legged_manipulation_data_store/clean_traj_data_1')
+# balanced_data_file = clean_data_folder / 'balanced_data_1.pkl'
+# with open(balanced_data_file, 'rb') as f:
+#     balanced_data = pickle.load(f)
 
 # balanced_data = sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_3_single_trajectories1/*/*.npz')) + sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1/*/*.npz')) + sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_6_single_trajectories1/*/*.npz'))
 
 # traj_data_file = Path(f'/common/users/dm1487/legged_manipulation/rollout_data_1/random_pos_seed_test_1_single_trajectories')
 # all_train_test_files = sorted(glob(f'{traj_data_file}/*/*.npz'))
 
-all_train_test_files = balanced_data
+all_train_test_files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/1_obs/0/*/*.npz') # balanced_data
 random.shuffle(all_train_test_files)
 
 num_train_envs = int(len(all_train_test_files) * train_test_split)
@@ -76,13 +90,13 @@ val_files = [all_train_test_files[i] for i in val_idxs]
 # training_files = balanced_data
 # test_files = val_balanced_data
 
-train_ds = TransformerDataset(files=training_files, sequence_length=sequence_length)
+train_ds = TransformerDataset(files=training_files, sequence_length=sequence_length, estimate_pose=estimate_pose)
 train_dl = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True)
 
-val_ds = TransformerDataset(files=val_files, sequence_length=sequence_length)
+val_ds = TransformerDataset(files=val_files, sequence_length=sequence_length, estimate_pose=estimate_pose)
 val_dl = DataLoader(val_ds, batch_size=val_batch_size, shuffle=True)
 
-test_ds = TransformerDataset(files=val_files, sequence_length=sequence_length)
+test_ds = TransformerDataset(files=val_files, sequence_length=sequence_length, estimate_pose=estimate_pose)
 test_dl = DataLoader(test_ds, batch_size=test_batch_size, shuffle=True)
 
 print(len(train_ds), len(val_ds), len(test_ds))
@@ -119,17 +133,36 @@ def loss_fn(out, targ, mask):
         loss2 = 0
         loss3 = 0
         loss4 = 0
-        loss_pose = F.mse_loss(out[:, :, k-6:k], targ[:, :, k-6:k], reduction='none')
+        loss_pose = F.mse_loss(out[:, :, :6], targ[:, :, :6], reduction='none')
         loss_pose = torch.sum(loss_pose, dim=-1).unsqueeze(-1)
     
     return loss1, loss2, loss3, loss4, loss_pose
 
-src_mask = torch.triu(torch.ones(sequence_length-1, sequence_length-1) * float('-inf'), diagonal=1).to(device)
+src_mask = torch.triu(torch.ones(sequence_length-1, sequence_length-1), diagonal=1).bool().to(device)
 all_anim = []
 patches_ctr = 0
 for epoch in range(epochs):
     train_total_loss = 0
     current_train_loss = 0
+
+    if len(training_files) > 200000:
+        sub_training_files = random.sample(training_files, 200000)
+    else:
+        sub_training_files = training_files
+    
+    if len(val_files) > 5000:
+        sub_val_files = random.sample(val_files, 5000)
+    else:
+        sub_val_files = val_files
+
+    train_ds = TransformerDataset(files=sub_training_files, sequence_length=sequence_length, estimate_pose=estimate_pose)
+    train_dl = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True)
+
+    val_ds = TransformerDataset(files=sub_val_files, sequence_length=sequence_length, estimate_pose=estimate_pose)
+    val_dl = DataLoader(val_ds, batch_size=val_batch_size, shuffle=True)
+
+    print(len(train_ds), len(val_ds))
+
     model.train()
     for i, (inp, targ, mask, fsw, _) in tqdm(enumerate(train_dl)):
         inp = inp.to(device)
@@ -227,11 +260,10 @@ for epoch in range(epochs):
 
                                 if estimate_pose:
                                     ## only pose
-                                    patch_set = get_visualization(anim_idx, targ_complete[:, step, k:k+6]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), targ_complete[:, step, k+6:], out_complete[:, step, k:k+6]* torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), out_complete[:, step, k+6:], fsw[:, step, :].squeeze(1))
+                                    patch_set = get_visualization(anim_idx, targ_complete[:, step, :6]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), targ_complete[:, step, k+6:], out_complete[:, step, k:k+6]* torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), out_complete[:, step, k+6:], fsw[:, step, :].squeeze(1), estimate_pose=estimate_pose)
                                 else:
                                     ## only priv_info
-                                    patch_set = get_visualization(anim_idx, pose[:, step, :]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), targ_complete[:, step, :]*torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device), pose[:, step, :]* torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), out_complete[:, step, :]*torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device), fsw[:, step, :].squeeze(1))
-
+                                    patch_set = get_visualization(anim_idx, pose[:, step, :]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), targ_complete[:, step, :]*torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device), pose[:, step, :]* torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), out_complete[:, step, :]*torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device), fsw[:, step, :].squeeze(1), estimate_pose=estimate_pose)
                                 patches.append(patch_set)
                         all_anim.append(patches)
                         anim_ctr += 1
@@ -332,5 +364,6 @@ for epoch in range(epochs):
         # })
     train_total_loss = 0
     current_train_loss = 0
+    val_total_loss = 0
         
 torch.save(model.state_dict(), path/f'model_{saved_model_idx}.pt')

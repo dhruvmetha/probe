@@ -20,10 +20,10 @@ def config_go1(Cnfg: Union[Cfg, Meta]):
         'FR_thigh_joint': 0.8,  # [rad]
         'RR_thigh_joint': 1.,  # [rad]
 
-        'FL_calf_joint': -1.5,  # [rad]
-        'RL_calf_joint': -1.5,  # [rad]
-        'FR_calf_joint': -1.5,  # [rad]
-        'RR_calf_joint': -1.5  # [rad]
+        'FL_calf_joint': -1.3,  # [rad]
+        'RL_calf_joint': -1.3,  # [rad]
+        'FR_calf_joint': -1.3,  # [rad]
+        'RR_calf_joint': -1.3, # [rad]
     }
 
     _ = Cnfg.control

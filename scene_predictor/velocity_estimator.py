@@ -1,0 +1,409 @@
+from data import VeloityEstimatorDataset, PoseSceneEstimatorDataset
+from torch.utils.data import DataLoader
+from torch.nn import functional as F
+from torch import nn
+from torch import optim
+from model import VelocityEstimatorTransformer
+from tqdm import tqdm
+from glob import glob
+from iou import get_bbox_intersections
+from visualization import get_visualization
+import torch
+import pickle
+import random
+import numpy as np
+import wandb
+import time
+
+SEED = 42
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+
+class VelocityEstimator:
+    def __init__(self, input_size, causal=False, num_layers=2, num_heads=2, device='cuda:0', embed_size=512, hidden_size=2048):
+        
+        self.optimizer = None
+        self.scheduler = None
+        self.sequence_length = 1500
+        self.device = device
+
+        self.model = VelocityEstimatorTransformer(input_size=input_size, output_size=24, embed_size=embed_size, hidden_size=hidden_size, num_heads=num_heads, max_sequence_length=self.sequence_length, num_layers=num_layers, estimate_pose=False)
+
+        if causal:
+            self.src_mask =  torch.triu(torch.ones(self.sequence_length, self.sequence_length), diagonal=1).bool().to(self.device)
+        else:
+            self.src_mask = None
+
+        self.saved_models = 0
+        self.saved_videos = 0
+
+        self.confidence_scale = 1.0
+        self.vel_scale = 1.0
+        self.contact_scale = 1/3
+        self.movable_scale = 1/2
+        self.pose_scale = 1
+        self.yaw_scale = 1 * 10
+        self.size_scale = 1
+
+        self.ious = {
+            'movable': [],
+            'fixed': [],
+        }
+
+    def loss_fn(self, out, targ, pose=None):
+        k = 0 + 0
+
+        # contact binary
+        loss1 = F.binary_cross_entropy(torch.sigmoid(out[:, :, k:k+1]), targ[:, :, k:k+1], reduction='none') + F.binary_cross_entropy(torch.sigmoid(out[:, :, k+7:k+8]), targ[:, :, k+7:k+8], reduction='none') + F.binary_cross_entropy(torch.sigmoid(out[:, :, k+14:k+15]), targ[:, :, k+14:k+15], reduction='none') 
+        loss1 = torch.sum(loss1, dim=-1).unsqueeze(-1)
+
+        # # movable or not movable
+        loss2 = F.binary_cross_entropy(torch.sigmoid(out[:, :, k+1:k+2]), targ[:, :, k+1:k+2], reduction='none') + F.binary_cross_entropy(torch.sigmoid(out[:, :, k+8:k+9]), targ[:, :, k+8:k+9], reduction='none') + F.binary_cross_entropy(torch.sigmoid(out[:, :, k+15:k+16]), targ[:, :, k+15:k+16], reduction='none') # + F.binary_cross_entropy(torch.sigmoid(out[:, :, 22:23]), targ[:, :, 22:23], reduction='none')
+        # print(loss2.shape)
+
+        # pose x, y
+        loss3 = F.mse_loss(out[:, :, k+2:k+4], targ[:, :, k+2:k+4], reduction='none') + F.mse_loss(out[:, :, k+9:k+11], targ[:, :, k+9:k+11], reduction='none') + F.mse_loss(out[:, :, k+16:k+18], targ[:, :, k+16:k+18], reduction='none') # + F.mse_loss(out[:, :, 23:25], targ[:, :, 23:25], reduction='none')
+        # loss3 = torch.sum(loss3, dim=-1).unsqueeze(-1)
+
+        # # yaw
+        loss4 = F.mse_loss(out[:, :, k+4:k+5], targ[:, :, k+4:k+5], reduction='none') + F.mse_loss(out[:, :, k+11:k+12], targ[:, :, k+11:k+12], reduction='none') + F.mse_loss(out[:, :, k+18:k+19], targ[:, :, k+18:k+19], reduction='none')
+        loss4 = torch.sum(loss4, dim=-1).unsqueeze(-1)
+
+        # # width, height
+        loss5 = F.mse_loss(out[:, :, k+5:k+7], targ[:, :, k+5:k+7], reduction='none') + F.mse_loss(out[:, :, k+12:k+14], targ[:, :, k+12:k+14], reduction='none') + F.mse_loss(out[:, :, k+19:k+21], targ[:, :, k+19:k+21], reduction='none')
+        loss5 = torch.sum(loss5, dim=-1).unsqueeze(-1)
+
+        ## add physical constraints 
+        # x, y, theta = pose
+        # loss6 = 
+
+        return loss1, loss2, loss3, loss4, loss5
+
+    def alternate_loss_fn(self, out, targ):
+        k = 0
+
+        
+
+
+        loss_object_1 = self.contact_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k:k+1]), targ[:, :, k:k+1], reduction='none') + self.movable_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k+1:k+2]), targ[:, :, k+1:k+2], reduction='none') 
+        loss_object_1 += (self.pose_scale * torch.sum(F.mse_loss(out[:, :, k+2:k+4], targ[:, :, k+2:k+4], reduction='none'), dim=-1).unsqueeze(-1))
+        loss_object_1 += (self.yaw_scale * torch.sum(F.mse_loss(out[:, :, k+4:k+5], targ[:, :, k+4:k+5], reduction='none'), dim=-1).unsqueeze(-1))
+        loss_object_1 += (self.size_scale * torch.sum(F.mse_loss(out[:, :, k+5:k+7], targ[:, :, k+5:k+7], reduction='none'), dim=-1).unsqueeze(-1))
+
+        loss_object_2 = self.contact_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k+7:k+8]), targ[:, :, k+7:k+8], reduction='none') + self.movable_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k+8:k+9]), targ[:, :, k+8:k+9], reduction='none')
+        loss_object_2 += (self.pose_scale * torch.sum(F.mse_loss(out[:, :, k+9:k+11], targ[:, :, k+9:k+11], reduction='none'), dim=-1).unsqueeze(-1))
+        loss_object_2 += (self.yaw_scale * torch.sum(F.mse_loss(out[:, :, k+11:k+12], targ[:, :, k+11:k+12], reduction='none'), dim=-1).unsqueeze(-1))
+        loss_object_2 += (self.size_scale * torch.sum(F.mse_loss(out[:, :, k+12:k+14], targ[:, :, k+12:k+14], reduction='none'), dim=-1).unsqueeze(-1))
+
+
+        loss_object_3 = self.contact_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k+14:k+15]), targ[:, :, k+14:k+15], reduction='none') + self.movable_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k+15:k+16]), targ[:, :, k+15:k+16], reduction='none')
+        loss_object_3 += (self.pose_scale * torch.sum(F.mse_loss(out[:, :, k+16:k+18], targ[:, :, k+16:k+18], reduction='none'), dim=-1).unsqueeze(-1))
+        loss_object_3 += (self.yaw_scale * torch.sum(F.mse_loss(out[:, :, k+18:k+19], targ[:, :, k+18:k+19], reduction='none'), dim=-1).unsqueeze(-1))
+        loss_object_3 += (self.size_scale * torch.sum(F.mse_loss(out[:, :, k+19:k+21], targ[:, :, k+19:k+21], reduction='none'), dim=-1).unsqueeze(-1))
+
+        return loss_object_1, loss_object_2, loss_object_3
+
+
+    def alternate_loss_fn2(self, pose, pose_targ):
+        
+        loss_pose = torch.sum(F.mse_loss(pose[:, :, :2], pose_targ[:, :, :2], reduction='none'), dim=-1).unsqueeze(-1)
+        return loss_pose
+
+    def train(self, dl, val_dl, save_folder, print_every=50, eval_every=250, save_every=500):
+        self.model.train()
+        train_loss, val_loss, val_ctr = 0, 0, 0
+        train_loss1, train_loss2, train_loss3, train_loss_pose, train_loss5 = 0, 0, 0, 0, 0
+        pbar = tqdm(total=len(dl))
+        for i, (inp, targ, mask, _, pose_targ) in enumerate(dl):
+            inp = inp.to(self.device)
+            targ = targ.to(self.device)
+            mask = mask.to(self.device)
+            vel_out = self.model(inp, src_mask=self.src_mask)
+
+            loss_pose = self.alternate_loss_fn2(targ, vel_out)
+            loss_pose = torch.sum(loss_pose*mask)/torch.sum(mask)
+            loss = loss_pose
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            train_loss += loss.item()
+            train_loss_pose += loss_pose.item()
+            
+
+            if (i+1) % print_every == 0:
+                print(f'step {i+1}:', train_loss/print_every)
+                wandb.log({
+                    'train_loss': train_loss/print_every,
+                    # 'contact loss': train_loss1/print_every,
+                    # 'movable loss': train_loss2/print_every,
+                    # 'pose loss': train_loss3/print_every,
+                    # 'yaw loss': train_loss4/print_every,
+                    # 'size loss': train_loss5/print_every,
+                    # 'loss class': train_loss1/print_every,
+                    'loss pose': train_loss_pose/print_every,
+                    'loss_object_1': train_loss1/print_every,
+                    'loss_object_2': train_loss2/print_every,
+                    'loss_object_3': train_loss3/print_every,
+                })
+                train_loss, train_loss1, train_loss2, train_loss3, train_loss_pose, train_loss5 = 0, 0, 0, 0, 0, 0
+            
+            if (i+1) % save_every == 0:
+                save_path = f'{save_folder}/checkpoints'
+                PATH = f'{save_path}/model_{self.saved_models}.pt'
+                torch.save(self.model.state_dict(), PATH)
+                print(f'{time.time()} model saved at {PATH}')
+                self.saved_models += 1
+
+            pbar.update(1)
+
+            if (i+1) % eval_every == 0:
+                new_val_loss = self.validate(val_dl, save_folder)
+                val_loss += new_val_loss
+                val_ctr += 1
+                wandb.log({
+                    'val loss': new_val_loss,
+                })
+                self.model.train()
+
+        pbar.close()
+        return val_loss/val_ctr
+    
+    def evaluation_metrics(self, out, targ, mask):
+        pass
+
+    def validate(self, dl, save_folder):
+        vis_path = f'{save_folder}/viz'
+        self.model.eval()
+        with torch.inference_mode():
+            val_loss = 0
+            pbar = tqdm(total=len(dl))
+            for i, (inp, targ, mask, fsw, pose_targ) in enumerate(dl):
+                inp = inp.to(self.device)
+                targ = targ.to(self.device)
+                mask = mask.to(self.device)
+                vel_out = self.model(inp, src_mask=self.src_mask)
+                pose_targ = pose_targ.to(self.device)
+
+                loss_pose = self.alternate_loss_fn2(targ, vel_out)
+                loss_pose = torch.sum(loss_pose*mask)/torch.sum(mask)
+                loss =  loss_pose
+                
+                val_loss += loss.item()
+
+                pbar.update(1)
+
+                # if i < 5:
+                #     self.save_visualization(inp, targ, out, fsw, pose_targ, pose_out, mask, vis_path)
+
+                # if i < 10:
+                #     self.compute_iou(inp, out, targ, mask)
+
+        # print("#################")
+        # print(f'movable iou loss', np.mean(self.ious['movable']))
+        # print(f'fixed iou loss', np.mean(self.ious['fixed']))
+        print(f'validation loss: {val_loss/(i+1)}')
+        # self.ious['movable'] = []
+        # self.ious['fixed'] = []
+        # print("#################")
+        self.scheduler.step(val_loss/(i+1))
+        pbar.close()
+        return val_loss/(i+1)
+    
+    def save_visualization(self, inp, targ, out, fsw, pose, pose_out, mask, save_path):
+        k = 0
+        patches = []
+        for step in range(inp.shape[1]):
+            if mask[0, step, 0]:
+                patch_set = get_visualization(0, pose[:, step, :3]*torch.tensor([1/0.25, 1, 3.14], device=self.device), targ[:, step, :]*torch.tensor([1, 1, 1, 1/0.25, 1, 3.14, 1, 1.7] * 3, device=self.device), pose_out[:, step, :3]* torch.tensor([1/0.25, 1, 3.14], device=self.device), out[:, step, :]*torch.tensor([1, 1, 1, 1/0.25, 1, 3.14, 1, 1.7] * 3, device=self.device), fsw[:, step, :].squeeze(1), estimate_pose=False)
+                patches.append(patch_set)
+        
+        with open(f'{save_path}/plot_{self.saved_videos}.pkl', 'wb') as f:
+                pickle.dump(patches, f)
+        self.saved_videos += 1
+    
+    def compute_iou(self, inp, out, targ, mask):
+        boxes = (torch.cat([targ[:, :, 3:8] , targ[:, :, 11:16]], dim=-1) * torch.tensor([1/0.25, 1, 3.14, 1, 1.7]*2, device=self.device)).cpu().numpy()
+        pred_boxes = (torch.cat([out[:, :, 3:8] , out[:, :, 11:16]], dim=-1) * torch.tensor([1/0.25, 1, 3.14, 1, 1.7]*2, device=self.device)).cpu().numpy()
+
+        inter_dict = {
+            'movable': [],
+            'fixed': [],
+        }
+        unions_dict = {
+            'movable': [],
+            'fixed': [],
+        }
+
+        for step in range(inp.shape[1]):
+            if mask[0, step, 0]:
+                if targ[0, step, 3] > 0:
+                    intersections, unions = get_bbox_intersections(boxes[0:1, step:step+1, :5], pred_boxes[0:1, step:step+1, :5])
+                    inter_dict['movable'].append(intersections[0][0][0])
+                    unions_dict['movable'].append(unions[0][0][0])
+
+                if targ[0, step, 11] > 0:
+                    intersections, unions = get_bbox_intersections(boxes[0:1, step:step+1, 5:10], pred_boxes[0:1, step:step+1, 5:10])
+                    inter_dict['fixed'].append(intersections[0][0][0])
+                    unions_dict['fixed'].append(unions[0][0][0])
+        
+        if len(inter_dict['movable']) > 0:
+            inter_dict['movable'] = np.array(inter_dict['movable'])
+            unions_dict['movable'] = np.array(unions_dict['movable'])
+            ious = inter_dict['movable'] / unions_dict['movable']
+            self.ious['movable'].extend(ious.tolist())
+            
+        if len(inter_dict['fixed']) > 0:
+            inter_dict['fixed'] = np.array(inter_dict['fixed'])
+            unions_dict['fixed'] = np.array(unions_dict['fixed'])
+            ious = inter_dict['fixed'] / unions_dict['fixed']
+            self.ious['fixed'].extend(ious.tolist())
+
+    def load_model(self, model_path, device='cuda:0'):
+        # self.model = torch.jit.load(model_path)
+        self.model.load_state_dict(torch.load(model_path))
+        print('model loaded')
+        self.device = device
+        self.model = self.model.to(self.device)
+
+    def predict(self, inp):
+        self.model.eval()
+        with torch.inference_mode():
+            inp = inp.to(self.device)
+            out = self.model(inp, src_mask=self.src_mask)
+        return out
+
+    def runner(self, data_folder, save_folder, epochs=100, train_test_split=0.95, train_batch_size=32, val_batch_size=32, learning_rate=1e-4, device='cuda:0', print_every=50, eval_every=250, save_every=500):
+        
+        wandb.init(project='scene_predictor', entity='dm1487')
+        save_path = f'{save_folder}/checkpoints'
+
+        train_data = []
+        for df in data_folder[:1]:
+            with open(df, 'rb') as f:
+                train_data += pickle.load(f)
+            # balanced_data = glob(data_folder)
+        # random.shuffle(balanced_data)
+        print('# trajectories:', len(train_data))
+
+        val_data = []
+        for df in data_folder[1:]:
+            with open(df, 'rb') as f:
+                val_data += pickle.load(f)
+            # balanced_data = glob(data_folder)
+        # random.shuffle(balanced_data)
+        print('# trajectories:', len(val_data))
+
+        val_data = random.sample(val_data, 4000)
+        # return
+        self.device = device
+        self.model = self.model.to(self.device)
+        if self.src_mask is not None:
+            self.src_mask = self.src_mask.to(self.device)
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+
+        # num_train_envs = int(len(balanced_data) * train_test_split)
+        # train_idxs = np.arange(0, num_train_envs).astype(int).tolist()
+        # val_idxs = np.arange(num_train_envs, len(balanced_data)).astype(int).tolist()
+        training_files = train_data # [balanced_data[i] for i in train_idxs]
+        val_files = val_data # [balanced_data[i] for i in val_idxs]
+
+        for epoch in range(epochs):
+            sub_training_files = training_files
+            sub_val_files = val_files
+
+            train_ds = VeloityEstimatorDataset(files=sub_training_files, sequence_length=self.sequence_length, estimate_pose=True)
+            train_dl = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True)
+            
+            val_ds = VeloityEstimatorDataset(files=sub_val_files, sequence_length=self.sequence_length, estimate_pose=True)
+            val_dl = DataLoader(val_ds, batch_size=val_batch_size, shuffle=True)
+
+            val_loss = self.train(train_dl, val_dl, save_folder, print_every=print_every, eval_every=eval_every, save_every=save_every)
+
+            PATH = f'{save_path}/model_{self.saved_models}.pt'
+            torch.save(self.model.state_dict(), PATH)
+            self.saved_models += 1
+            print(f'{time.time()} model saved at {PATH}')
+
+    def load_pretrained(self, model_path, fine_tune=True):
+        from model import PretrainTransformer
+        self.pretrain_model = PretrainTransformer(input_size=39, output_size=39, embed_size=512, hidden_size=2048, num_heads=4, max_sequence_length=self.sequence_length, num_layers=8)
+        self.pretrain_model.load_state_dict(torch.load(model_path))
+        print('pretrain model loaded')
+        if fine_tune:
+            for param in self.pretrain_model.parameters():
+                param.requires_grad = False
+            self.pretrain_model.eval()
+
+        class SceneLayer(nn.Module):
+            def __init__(self, pretrained_model):
+                super(SceneLayer, self).__init__()
+                self.pretrained_model = pretrained_model
+                self.scene_layers = nn.Sequential(nn.Linear(512, 256), nn.ELU(), nn.Linear(256, 128), nn.ELU(), nn.Linear(128, 21))
+            
+            def forward(self, x, src_mask):
+                x = self.pretrained_model.linear_in(x)
+                x = self.pretrained_model.positonal_embedding(x)
+                x = self.pretrained_model.encoder(x, mask=src_mask)
+                x = self.pretrained_model.linear_out(x)
+                x = self.scene_layers(x)
+                return x
+            
+        self.model = SceneLayer(self.pretrain_model)
+        print(self.model)
+
+if __name__ == '__main__':
+    from datetime import datetime
+    import os
+
+    # data_folder = '/common/users/dm1487/legged_manipulation_data_store/trajectories/1_obs/8/*/*.npz'
+    # model_file = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results_2_obs_se/2023-08-30_16-39-37/checkpoints/model_1.pt'
+    # se = SceneEstimator()
+    # se.load_model(model_file)
+    # m = torch.jit.script(se.model)
+    # torch.jit.save(m, '/common/users/dm1487/test_model_1.pt')
+
+    save_folder = f'/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results_2_obs_se/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
+
+    # data_folder = '/common/users/dm1487/legged_manipulation_data_store/trajectories/test/0/all_files.pkl'
+    data_folder = ['/common/users/dm1487/legged_manipulation_data_store/trajectories/icra_data_sep2/2_obs/all_files_bal/all_files_1.pkl', '/common/users/dm1487/legged_manipulation_data_store/trajectories/icra_data_sep7/2_obs/all_files_bal/all_files_balanced_0_1_2.pkl']
+    # data_folder = '/common/users/dm1487/legged_manipulation_data_store/trajectories/icra_data_sep6/2_obs/all_files_bal/all_files_0.pkl'
+    # data_folder = '/common/users/dm1487/legged_manipulation_data_store/trajectories/icra_data_sep7/2_obs/all_files_bal/all_files_balanced_0_1_2.pkl'
+
+    data_folders = [
+        '/common/users/dm1487/legged_manipulation_data_store/trajectories/icra_data_sep16/2_obs/all_files_bal/all_files_1_train.pkl',
+        '/common/users/dm1487/legged_manipulation_data_store/trajectories/icra_data_sep7/2_obs/all_files_bal/all_files_balanced_0_1_2.pkl',
+        '/common/users/dm1487/legged_manipulation_data_store/trajectories/icra_data_sep2/2_obs/all_files_bal/all_files_1.pkl',
+
+        '/common/users/dm1487/legged_manipulation_data_store/trajectories/icra_data_sep16/2_obs/all_files_bal/all_files_1_val.pkl'
+    ]
+
+
+    
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+        os.makedirs(f'{save_folder}/checkpoints')
+        os.makedirs(f'{save_folder}/viz')
+
+    load_pretrained_model = False
+    fine_tune = False
+    device = 'cuda:0'
+    input_size = 39
+    num_layers = 1
+    num_heads = 1
+    bs = 128
+    hidden_size = 512
+    embed_size = 128
+    causal = True # torch.triu(torch.ones(sequence_length, sequence_length), diagonal=1).bool()
+    se = VelocityEstimator(input_size=input_size, causal=causal, num_layers=num_layers, num_heads=num_heads)
+    if load_pretrained_model:
+        model_path = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/pretrain_2_obs/2023-08-30_22-18-10/checkpoints/model_state_dict11.pt'
+        se.load_pretrained(model_path, fine_tune=fine_tune)
+
+    with open(f'{save_folder}/info.txt', 'w') as f:
+        f.write(f'{"causal" if causal else "not causal"}, {"no" if input_size == 39 else ""} velocity estimator')
+
+    se.runner(data_folders, save_folder, epochs=50, train_test_split=0.98, train_batch_size=bs, val_batch_size=bs, learning_rate=1e-4, device='cuda:0', print_every=100, eval_every=1000, save_every=100)

@@ -6,16 +6,17 @@ from params_proto import PrefixProto, ParamsProto
 class Cfg(PrefixProto, cli=False):
     class env(PrefixProto, cli=False):
         num_envs = 5
-        num_observations = 9 + 21 # 9 + 21
+        num_observations = 3 + 2 + 3 + 27
         num_scalar_observations = 9
         # if not None a privilige_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise
-        num_privileged_obs = 21
+        num_privileged_obs = 27
         num_actions = 3 # 13
-        num_observation_history = 50
+        num_observation_history = 30
         env_spacing = 8.  # not used with heightfields/trimeshes
         send_timeouts = True  # send time out information to the algorithm
         episode_length_s = 25  # episode length in seconds
-        train_test_split = 0.95  # fraction of envs to use for training       
+        train_test_split = 0.95  # fraction of envs to use for training
+        record_video = True  
 
 
         # observation booleans for navigator
@@ -219,7 +220,6 @@ class Cfg(PrefixProto, cli=False):
     class control(PrefixProto, cli=False):
         decimation = 2
 
-
     class domain_rand(PrefixProto, cli=False):
         rand_interval_s = 10
         randomize_rigids_after_start = True
@@ -282,7 +282,7 @@ class Cfg(PrefixProto, cli=False):
         # step rewards
         # action_energy = -0.1 # -0.1
         # action_rate = -0.001
-    # collision = -0.005
+        # collision = -0.005
         # zero_velocity = -0.01
         # time = -0.001
         
@@ -300,11 +300,24 @@ class Cfg(PrefixProto, cli=False):
         # zero_velocity = -0.05
         # time = -0.01
 
-        terminal_time_out = -0.2 # -5.0
-        terminal_distance_gs = 1.0
-        torque_energy = -5e-8
-        distance = -5e-6
+        # terminal_time_out = -1. # -5.0
+        # terminal_distance_gs = 1.0
+        # # torque_energy = -5e-8
+        # # distance = -5e-5
+        # norm_distance = 1.
+        # time = -0.01
 
+
+        terminal_time_out = -1.0 # -5.0
+        terminal_distance_gs = 10.0
+        # terminal_distance_travelled = 0.5
+        # terminal_time_taken = 3.0
+        # terminal_num_collisions = 0.5
+        # torque_energy = -5e-5
+        distance = -0.0 # -1e-3
+        # norm_distance = 1.0
+        # time = -1e-1
+        # collision = -0.1
         
     class normalization(PrefixProto, cli=False):
         clip_observations = 100.
@@ -381,8 +394,8 @@ class Cfg(PrefixProto, cli=False):
     # viewer camera:
     class viewer(PrefixProto, cli=False):
         ref_env = 0
-        pos = [-2, 0, 6]  # [m]
-        lookat = [2, 0, 3.]  # [m]
+        pos = [-3, 0, 6]  # [m]
+        lookat = [0, 0, 3.]  # [m]
 
     class sim(PrefixProto, cli=False):
         dt = 0.005

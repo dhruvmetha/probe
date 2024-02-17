@@ -39,7 +39,7 @@ def euler_to_quaternion(euler):
 
 class LeggedRobot():
     def __init__(self, gym, sim, cfg: Cfg, sim_params, env_origins, eval_cfg=None,
-                 initial_dynamics_dict=None, device='cuda:0'):
+                 initial_dynamics_dict=None, random_pose=False, device='cuda:0'):
         """ Parses the provided config file,
             calls create_sim() (which creates, simulation, terrain and environments),
             initilizes pytorch buffers used during training
@@ -54,13 +54,20 @@ class LeggedRobot():
         """
         self.gym = gym
         self.sim = sim
+        self.random_pose = random_pose
 
         config_go1(cfg)
         self.cfg = cfg
         self.eval_cfg = eval_cfg
+        print('eval', self.eval_cfg)
         self.env_origins = env_origins
+
         
-        self.policy = self.load_env('gait-conditioned-agility/pretrain-v0/train')
+        # self.policy = self.load_env('gait-conditioned-agility/pretrain-v0/train')
+        self.policy = self.load_env('gait-conditioned-agility/2023-08-07/train')
+
+        print('hereeee', self.cfg.domain_rand.randomize_friction)
+
 
         self.sim_params = sim_params
         self.height_samples = None
@@ -204,6 +211,8 @@ class LeggedRobot():
 
         self.contact_forces = self.all_contact_forces[self.go1_rb_indices].view(self.num_envs, -1, 3)
 
+        self.num_collisions += ((torch.sum(1. * (torch.norm(self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 0.1), dim=1) > 0) * 1.0)
+        # print("#######", (torch.norm(self.contact_forces[0, self.penalised_contact_indices, :], dim=-1) > 0.1), self.num_collisions[0])
         self._post_physics_step_callback()
 
         # compute observations, rewards, resets, ...
@@ -220,6 +229,8 @@ class LeggedRobot():
         self.last_dof_vel[:] = self.dof_vel[:]
         self.last_root_vel[:] = self.root_states[:, 7:13]
 
+        # print(((1. * (torch.norm(self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 0.1)) * 0.25).shape)
+        # self.num_collisions[:] += (1. * (torch.norm(self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 0.1)) * 0.25
         # if self.viewer and self.enable_viewer_sync and self.debug_viz:
         #     self._draw_debug_vis()
 
@@ -326,9 +337,19 @@ class LeggedRobot():
             self.extras["time_outs"] = self.time_out_buf[:self.num_train_envs]
 
         self.gait_indices[env_ids] = 0
-
+        try:
+            self.joint_pos_err_last_last[env_ids, :] = 0.
+            self.joint_pos_err_last[env_ids, :] = 0.
+            self.joint_vel_last_last[env_ids, :] = 0.
+            self.joint_vel_last[env_ids, :] = 0.
+        except:
+            pass
+        self.actions[env_ids, :] = 0.
+        self.torques[env_ids, :] = 0. # self._compute_torques(self.actions[env_ids, :]).view(self.torques.shape)[env_ids, :]
         for i in range(len(self.lag_buffer)):
             self.lag_buffer[i][env_ids, :] = 0
+
+        self.num_collisions[env_ids] = 0
 
     def set_idx_pose(self, env_ids, dof_pos, base_state):
         if len(env_ids) == 0:
@@ -419,15 +440,15 @@ class LeggedRobot():
 
         if self.cfg.env.observe_two_prev_actions:
             self.obs_buf = torch.cat((self.obs_buf,
-                                      self.last_actions), dim=-1)
+                                      self.last_actions), dim=-1) # 12
 
         if self.cfg.env.observe_timing_parameter:
             self.obs_buf = torch.cat((self.obs_buf,
-                                      self.gait_indices.unsqueeze(1)), dim=-1)
+                                      self.gait_indices.unsqueeze(1)), dim=-1) # 1
 
         if self.cfg.env.observe_clock_inputs:
             self.obs_buf = torch.cat((self.obs_buf,
-                                      self.clock_inputs), dim=-1)
+                                      self.clock_inputs), dim=-1) # 4
 
 
         # if self.cfg.env.observe_desired_contact_states:
@@ -629,8 +650,10 @@ class LeggedRobot():
         ret, ret_eval = None, None
 
         if len(env_ids_train) > 0:
+            self.random_pose = False
             ret = func(env_ids_train, self.cfg)
         if len(env_ids_eval) > 0:
+            self.random_pose = False
             ret_eval = func(env_ids_eval, self.eval_cfg)
             if ret is not None and ret_eval is not None: ret = torch.cat((ret, ret_eval), axis=-1)
 
@@ -665,6 +688,7 @@ class LeggedRobot():
         Returns:
             [List[gymapi.RigidShapeProperties]]: Modified rigid shape properties
         """
+        # print('rigid_shape_props', 'env_id', env_id, len(props))
         for s in range(len(props)):
             props[s].friction = self.friction_coeffs[env_id, 0]
             props[s].restitution = self.restitutions[env_id, 0]
@@ -729,29 +753,37 @@ class LeggedRobot():
         for env_id in env_ids:
             rigid_shape_props = self.gym.get_actor_rigid_shape_properties(self.envs[env_id], 0)
 
-            for i in range(self.num_dof):
+            for i in range(len(rigid_shape_props)):
                 rigid_shape_props[i].friction = self.friction_coeffs[env_id, 0]
                 rigid_shape_props[i].restitution = self.restitutions[env_id, 0]
 
             self.gym.set_actor_rigid_shape_properties(self.envs[env_id], 0, rigid_shape_props)
 
+            # props = self.gym.get_actor_rigid_shape_properties(self.envs[0], 0)
+            # for i in range(len(props)):
+                # print('refresh_actor_rigid_shape_props', 'env_id', env_id, props[i].friction, props[i].restitution)
+
     def _randomize_dof_props(self, env_ids, cfg):
         if cfg.domain_rand.randomize_motor_strength:
+            # print("randomize motor strength", cfg.domain_rand.randomize_motor_strength)
             min_strength, max_strength = cfg.domain_rand.motor_strength_range
             self.motor_strengths[env_ids, :] = torch.rand(len(env_ids), dtype=torch.float, device=self.device,
                                                      requires_grad=False).unsqueeze(1) * (
                                                   max_strength - min_strength) + min_strength
         if cfg.domain_rand.randomize_motor_offset:
+            # print("randomize motor offset", cfg.domain_rand.randomize_motor_offset)
             min_offset, max_offset = cfg.domain_rand.motor_offset_range
             self.motor_offsets[env_ids, :] = torch.rand(len(env_ids), self.num_dof, dtype=torch.float,
                                                         device=self.device, requires_grad=False) * (
                                                      max_offset - min_offset) + min_offset
         if cfg.domain_rand.randomize_Kp_factor:
+            # print("randomize Kp factor", cfg.domain_rand.randomize_Kp_factor)
             min_Kp_factor, max_Kp_factor = cfg.domain_rand.Kp_factor_range
             self.Kp_factors[env_ids, :] = torch.rand(len(env_ids), dtype=torch.float, device=self.device,
                                                      requires_grad=False).unsqueeze(1) * (
                                                   max_Kp_factor - min_Kp_factor) + min_Kp_factor
         if cfg.domain_rand.randomize_Kd_factor:
+            # print("randomize Kd factor", cfg.domain_rand.randomize_Kd_factor)
             min_Kd_factor, max_Kd_factor = cfg.domain_rand.Kd_factor_range
             self.Kd_factors[env_ids, :] = torch.rand(len(env_ids), dtype=torch.float, device=self.device,
                                                      requires_grad=False).unsqueeze(1) * (
@@ -784,24 +816,40 @@ class LeggedRobot():
             self.measured_heights = self._get_heights(torch.arange(self.num_envs, device=self.device), self.cfg)
 
         # push robots
-        self._call_train_eval(self._push_robots, torch.arange(self.num_envs, device=self.device))
+        # self._call_train_eval(self._push_robots, torch.arange(self.num_envs, device=self.device))
 
         # randomize dof properties
         env_ids = (self.episode_length_buf % int(self.cfg.domain_rand.rand_interval) == 0).nonzero(
             as_tuple=False).flatten()
-        self._call_train_eval(self._randomize_dof_props, env_ids)
+        # self._call_train_eval(self._randomize_dof_props, env_ids)
 
-        if self.common_step_counter % int(self.cfg.domain_rand.gravity_rand_interval) == 0:
-            self._randomize_gravity()
-        if int(self.common_step_counter - self.cfg.domain_rand.gravity_rand_duration) % int(
-                self.cfg.domain_rand.gravity_rand_interval) == 0:
-            self._randomize_gravity(torch.tensor([0, 0, 0]))
-        if self.cfg.domain_rand.randomize_rigids_after_start:
-            self._call_train_eval(self._randomize_rigid_body_props, env_ids)
-            self._call_train_eval(self.refresh_actor_rigid_shape_props, env_ids)
+        # if self.common_step_counter % int(self.cfg.domain_rand.gravity_rand_interval) == 0:
+        #     self._randomize_gravity()
+        # if int(self.common_step_counter - self.cfg.domain_rand.gravity_rand_duration) % int(
+        #         self.cfg.domain_rand.gravity_rand_interval) == 0:
+        #     self._randomize_gravity(torch.tensor([0, 0, 0]))
+        # if self.cfg.domain_rand.randomize_rigids_after_start:
+        #     self._call_train_eval(self._randomize_rigid_body_props, env_ids)
+        #     self._call_train_eval(self.refresh_actor_rigid_shape_props, env_ids)
 
 
     def _reset_commands(self, env_ids):
+        # gaits = {"pronking": [0, 0, 0],
+        #         "trotting": [0.5, 0, 0],
+        #         "bounding": [0, 0.5, 0],
+        #         "pacing": [0, 0, 0.5]}
+        
+        # x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 0.0, 0.0, 0.0
+        # body_height_cmd = 0.0
+        # step_frequency_cmd = 3.0
+        # gait = torch.tensor(gaits["trotting"])
+        # footswing_height_cmd = 0.1
+        # pitch_cmd = 0.0
+        # roll_cmd = 0.0
+        # stance_width_cmd = 0.3
+
+        # self.commands[env_ids, :13] = torch.tensor([x_vel_cmd, y_vel_cmd, yaw_vel_cmd, body_height_cmd, step_frequency_cmd, *gait, 0.5, footswing_height_cmd, pitch_cmd, roll_cmd, stance_width_cmd], device=self.device).repeat(len(env_ids), 1)
+
         x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 0.0, 0.0, 0.0
         body_height_cmd = 0.05
         step_frequency_cmd = 3.0
@@ -812,6 +860,16 @@ class LeggedRobot():
         stance_width_cmd = 0.25
 
         self.commands[env_ids, :13] = torch.tensor([x_vel_cmd, y_vel_cmd, yaw_vel_cmd, body_height_cmd, step_frequency_cmd, *gait, 0.5, footswing_height_cmd, pitch_cmd, roll_cmd, stance_width_cmd], device=self.device).repeat(len(env_ids), 1)
+        
+        # body_height_cmd = 0.0
+        # step_frequency_cmd = 3.0
+        # gait = torch.tensor([0.5, 0, 0])
+        # footswing_height_cmd = 0.1
+        # pitch_cmd = 0.0
+        # roll_cmd = 0.0
+        # stance_width_cmd = 0.3
+
+        # self.commands[env_ids, :13] = torch.tensor([x_vel_cmd, y_vel_cmd, yaw_vel_cmd, body_height_cmd, step_frequency_cmd, *gait, 0.5, footswing_height_cmd, pitch_cmd, roll_cmd, stance_width_cmd], device=self.device).repeat(len(env_ids), 1)
 
     def _resample_commands(self, env_ids):
 
@@ -1032,8 +1090,6 @@ class LeggedRobot():
         else:
             self.joint_pos_target = actions_scaled + self.default_dof_pos
 
-        
-
         control_type = self.cfg.control.control_type
 
         if control_type == "actuator_net":
@@ -1085,13 +1141,18 @@ class LeggedRobot():
             env_ids (List[int]): Environemnt ids
         """
 
+        # print(cfg)
+
         if len(env_ids) == 0:
             return
         go1_ids_int32 = torch.tensor([self.gym.find_actor_index(self.envs[i.item()], 'go1', gymapi.DOMAIN_SIM) for i in env_ids], dtype=torch.long, device=self.device)
 
         random_base_pos = torch.zeros_like(self.all_root_states[go1_ids_int32]) + self.base_init_state
-        random_pos = False
+        random_pos = self.random_pose
         self.goal_positions[env_ids] = 3.5
+        front_start, front_end = -0.35, 0.16
+        back_start, back_end = 2.9, 3.1 # 3.7, 3.9
+
         if random_pos:
             # choose half of the go1_ids_int32 at random((self.all_root_states[go1_ids_int32] > 1.5).float()) * (-0.2)
             random_idx = torch.arange(len(go1_ids_int32)).numpy()
@@ -1099,12 +1160,12 @@ class LeggedRobot():
             random_idx = torch.tensor(random_idx, device=self.device)
 
             if len(random_idx) == 1:
-                if np.random.uniform() > 0.1:
+                if np.random.uniform() > 0.25:
                     random_base_pos[:, 0] = torch.rand(1, device=self.device) * (0.16 - (-0.35)) + (-0.35)
                 else:
                     random_base_pos[:, 0] = torch.rand(1, device=self.device) * (3.1 - (2.9)) + (2.9)
             else:
-                margin = int(math.ceil(len(random_idx) * 9/10))
+                margin = int(math.ceil(len(random_idx) * 7.5/10))
                 first = random_idx[:margin]
                 second = random_idx[margin:]
                 random_base_pos[first, [0]*len(first)] = torch.rand(len(first), device=self.device) * (0.16 - (-0.35)) + (-0.35)
@@ -1118,10 +1179,20 @@ class LeggedRobot():
             random_base_pos[:, 1] = torch.rand(len(go1_ids_int32), device=self.device) * (0.65 - (-0.65)) + (-0.65)
             random_base_pos[:, 3:7] = euler_to_quaternion(random_rot)[..., [1, 2, 3, 0]]
 
+        # random_base_pos[:, 0] += torch.rand(len(go1_ids_int32), device=self.device) * (0.2 - (-0.0)) + (-0.0)
+        # random_base_pos[:, 1] += torch.rand(len(go1_ids_int32), device=self.device) * (0.3 - (-0.3)) + (-0.3)
 
         self.all_root_states[go1_ids_int32] = random_base_pos
         # print(self.all_root_states[go1_ids_int32, 0])
         self.all_root_states[go1_ids_int32, :3] += self.env_origins[env_ids]
+
+        self.root_states[env_ids] = self.all_root_states[go1_ids_int32]
+
+        self.base_pos[env_ids] = self.root_states[env_ids, 0:3]
+        self.base_quat[env_ids] = self.root_states[env_ids, 3:7]
+        self.base_lin_vel[env_ids] = quat_rotate_inverse(self.base_quat[env_ids], self.root_states[env_ids, 7:10])
+        self.base_ang_vel[env_ids] = quat_rotate_inverse(self.base_quat[env_ids], self.root_states[env_ids, 10:13])
+        self.projected_gravity[:] = quat_rotate_inverse(self.base_quat[:], self.gravity_vec)
         
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self.all_root_states),
@@ -1323,6 +1394,7 @@ class LeggedRobot():
         self.last_last_joint_pos_target = torch.zeros(self.num_envs, self.num_dof, dtype=torch.float,
                                                       device=self.device,
                                                       requires_grad=False)
+        
         self.last_dof_vel = torch.zeros_like(self.dof_vel)
         self.last_root_vel = torch.zeros_like(self.root_states[:, 7:13])
 
@@ -1434,6 +1506,8 @@ class LeggedRobot():
                                                    requires_grad=False)
         self.halftime_clock_inputs = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device,
                                                  requires_grad=False)
+        
+        self.num_collisions = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)
 
     def _init_command_distribution(self, env_ids):
         # new style curriculum
@@ -1622,7 +1696,7 @@ class LeggedRobot():
         self.default_restitution = rigid_shape_props_asset[1].restitution
         self._init_custom_buffers__()
         self._call_train_eval(self._randomize_rigid_body_props, torch.arange(self.num_envs, device=self.device))
-        self._randomize_gravity()
+        # self._randomize_gravity()
 
 
     def create_actor(self, env_idx, env_handle, pos):
@@ -1661,6 +1735,7 @@ class LeggedRobot():
         feet_names = [s for s in body_names if self.cfg.asset.foot_name in s]
         penalized_contact_names = []
         for name in self.cfg.asset.penalize_contacts_on:
+            print(name)
             penalized_contact_names.extend([s for s in body_names if name in s])
         termination_contact_names = []
         for name in self.cfg.asset.terminate_after_contacts_on:
@@ -1998,19 +2073,33 @@ class LeggedRobot():
 
         # turn off DR for evaluation script
         self.cfg.domain_rand.push_robots = False
-        self.cfg.domain_rand.randomize_friction = False
+        self.cfg.domain_rand.randomize_friction = True
         self.cfg.domain_rand.randomize_gravity = False
-        self.cfg.domain_rand.randomize_restitution = False
-        self.cfg.domain_rand.randomize_motor_offset = False
-        self.cfg.domain_rand.randomize_motor_strength = False
+        self.cfg.domain_rand.randomize_restitution = True
+        self.cfg.domain_rand.randomize_motor_offset = True
+        self.cfg.domain_rand.randomize_motor_strength = True
         self.cfg.domain_rand.randomize_friction_indep = False
         self.cfg.domain_rand.randomize_ground_friction = False
-        self.cfg.domain_rand.randomize_base_mass = False
+        self.cfg.domain_rand.randomize_base_mass = True
         self.cfg.domain_rand.randomize_Kd_factor = False
         self.cfg.domain_rand.randomize_Kp_factor = False
         self.cfg.domain_rand.randomize_joint_friction = False
         self.cfg.domain_rand.randomize_com_displacement = False
-        
+        self.cfg.init_state.pos[2] = 0.32
+
+        # self.cfg.init_state.default_joint_angles = {
+        # 'FL_calf_joint': -1.3,  # [rad]
+        # 'RL_calf_joint': -1.3,  # [rad]
+        # 'FR_calf_joint': -1.3,  # [rad]
+        # 'RR_calf_joint': -1.3, # [rad]
+        # }
+
+        # self.cfg.init_state.default_joint_angles['FL_calf_joint'] = -1.3
+        # self.cfg.init_state.default_joint_angles['RL_calf_joint'] = -1.3
+        # self.cfg.init_state.default_joint_angles['FR_calf_joint'] = -1.3
+        # self.cfg.init_state.default_joint_angles['RR_calf_joint'] = -1.3
+
+        # self.cfg.asset.file = f'{MINI_GYM_ROOT_DIR}/resources/robots/go1/urdf/go1_new.urdf'
 
         # self.cfg.env.num_recording_envs = 1
         self.cfg.env.num_envs = self.num_envs
@@ -2023,12 +2112,9 @@ class LeggedRobot():
 
         self.cfg.domain_rand.lag_timesteps = 6
         self.cfg.domain_rand.randomize_lag_timesteps = True
+        self.cfg.domain_rand.randomize_rigids_after_start = True
         self.cfg.control.control_type = "actuator_net"
-
-        # from go1_gym.envs.wrappers.history_wrapper import HistoryWrapper
-
-        # env = VelocityTrackingEasyEnv(sim_device='cuda:0', headless=False, cfg=Cfg)
-        # env = HistoryWrapper(env)
+        self.cfg.asset.penalize_contacts_on = ["base", "thigh", "calf"]
 
         # # load policy
         from ml_logger import logger

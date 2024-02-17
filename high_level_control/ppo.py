@@ -76,9 +76,7 @@ class PPO:
         self.transition.observation_histories = obs_history
         return self.transition.actions
     
-    # def add_low_level_obs(self, low_level_obs):
-    #     self.transition.low_level_observations = low_level_obs.clone()
-
+    
     def process_env_step(self, next_observations, rewards, dones, infos):
         self.transition.next_observations = next_observations.clone()
         self.transition.rewards = rewards.clone()
@@ -168,43 +166,43 @@ class PPO:
             num_train = int(data_size // 5 * 4)
 
 
-        mean_osm_loss = 0.
-        osm_loss_count = 0
-        if len(self.one_step_models) > 0:
-            for i in range(1):
-                hl_loss_fn = nn.MSELoss(reduction='mean')
-                # (512 * 25) / 100 = 128 
-                generator = self.storage.mini_batch_generator(100, PPO_Args.num_learning_epochs)
-                for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, low_level_obs_batch, low_level_next_obs_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
-                    old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
+        # mean_osm_loss = 0.
+        # osm_loss_count = 0
+        # if len(self.one_step_models) > 0:
+        #     for i in range(1):
+        #         hl_loss_fn = nn.MSELoss(reduction='mean')
+        #         # (512 * 25) / 100 = 128 
+        #         generator = self.storage.mini_batch_generator(100, PPO_Args.num_learning_epochs)
+        #         for obs_batch, next_obs_batch, critic_obs_batch, privileged_obs_batch, obs_history_batch, actions_batch, low_level_obs_batch, low_level_next_obs_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
+        #             old_mu_batch, old_sigma_batch, masks_batch, env_bins_batch in generator:
 
-                    osm_idx = np.random.choice(np.arange(0, len(self.one_step_models)))
-                    osm_model = self.one_step_models[osm_idx]
-                    osm_optimizer = self.one_step_optimizers[osm_idx]
-                    # latent = None
-                    # with torch.no_grad():
-                    #     # obs_batch[:, :6], 
-                    #     latent = self.actor_critic.get_latent(obs_history_batch, privileged_obs_batch)
-                    #     latent_next = self.actor_critic.get_latent(torch.cat([obs_history_batch[:, obs_batch.size(1):], next_obs_batch], dim=-1), privileged_obs_batch)
+        #             osm_idx = np.random.choice(np.arange(0, len(self.one_step_models)))
+        #             osm_model = self.one_step_models[osm_idx]
+        #             osm_optimizer = self.one_step_optimizers[osm_idx]
+        #             # latent = None
+        #             # with torch.no_grad():
+        #             #     # obs_batch[:, :6], 
+        #             #     latent = self.actor_critic.get_latent(obs_history_batch, privileged_obs_batch)
+        #             #     latent_next = self.actor_critic.get_latent(torch.cat([obs_history_batch[:, obs_batch.size(1):], next_obs_batch], dim=-1), privileged_obs_batch)
 
-                    osm_model.train()
-                    osm_optimizer.zero_grad()
+        #             osm_model.train()
+        #             osm_optimizer.zero_grad()
                     
-                    decoded_obs, decoded_next_obs, decoded_pred_next_obs, _ = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
+        #             decoded_obs, decoded_next_obs, decoded_pred_next_obs, _ = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
 
-                    loss = hl_loss_fn(decoded_obs, torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1)) + hl_loss_fn(decoded_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1)) + hl_loss_fn(decoded_pred_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
+        #             loss = hl_loss_fn(decoded_obs, torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1)) + hl_loss_fn(decoded_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1)) + hl_loss_fn(decoded_pred_next_obs, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
 
-                    # out = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch)
-                    # loss = hl_loss_fn(out, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
-                    loss.backward()
-                    osm_optimizer.step()
-                    mean_osm_loss += loss.item()
-                    osm_loss_count += 1
+        #             # out = osm_model(torch.cat([obs_batch[:, :6], obs_batch[:, 9:]], dim=-1), actions_batch)
+        #             # loss = hl_loss_fn(out, torch.cat([next_obs_batch[:, :6], next_obs_batch[:, 9:]], dim=-1))
+        #             loss.backward()
+        #             osm_optimizer.step()
+        #             mean_osm_loss += loss.item()
+        #             osm_loss_count += 1
 
-        try:
-            mean_osm_loss /= osm_loss_count
-        except ZeroDivisionError:
-            mean_osm_loss = 0.
+        # try:
+        #     mean_osm_loss /= osm_loss_count
+        # except ZeroDivisionError:
+        #     mean_osm_loss = 0.
             
         num_updates = PPO_Args.num_learning_epochs * PPO_Args.num_mini_batches
         mean_value_loss /= num_updates
@@ -218,6 +216,4 @@ class PPO:
         self.storage.clear()
 
 
-
-
-        return mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student, mean_osm_loss
+        return mean_value_loss, mean_surrogate_loss, mean_adaptation_module_loss, mean_decoder_loss, mean_decoder_loss_student, mean_adaptation_module_test_loss, mean_decoder_test_loss, mean_decoder_test_loss_student

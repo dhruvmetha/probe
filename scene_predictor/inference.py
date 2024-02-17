@@ -9,17 +9,21 @@ class PoseInference:
         self.device = device
         output_size = 24 + 6 + 21 # 27
         self.sequence_length = sequence_length
-        self.model = MiniTransformer(input_size=27, output_size=output_size, embed_size=512, hidden_size=2048, num_heads=4, max_sequence_length=750, num_layers=4, estimate_pose=True)
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        try:
+            self.model = torch.jit.load(model_path)
+        except:
+            self.model = MiniTransformer(input_size=27, output_size=output_size, embed_size=512, hidden_size=2048, num_heads=4, max_sequence_length=750, num_layers=4, estimate_pose=True)
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.to(self.device)
         self.model.eval()
     
     def predict(self, x):
-        with torch.no_grad():
+        with torch.inference_mode():
             x = x.to(self.device)
-            src_mask = torch.triu(torch.ones(self.sequence_length-1, self.sequence_length-1) * float('-inf'), diagonal=1).to(self.device)
+            # src_mask = torch.triu(torch.ones(self.sequence_length-1, self.sequence_length-1) * float('-inf'), diagonal=1).to(self.device)
+            src_mask = torch.triu(torch.ones(self.sequence_length-1, self.sequence_length-1), diagonal=1).bool().to(device)
             output = self.model(x, src_mask)
-            return output
+            return output.detach()
         
     def infer_and_plot(self, data, save_path):
         patches = []
@@ -42,22 +46,23 @@ class PoseInference:
             pickle.dump(patches, f)
 
 class ObstacleInference:
-    def __init__(self, model_path='', sequence_length=750, device='cuda:1'):
+    def __init__(self, model_path='', sequence_length=750, device='cuda:0'):
         self.device = device
         output_size = 24 + 6 + 21 # 27
         self.sequence_length = sequence_length
-        self.model = MiniTransformer(input_size=12+27+6, output_size=output_size, embed_size=512, hidden_size=2048, num_heads=4, max_sequence_length=750, num_layers=4, estimate_pose=False)
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        # self.model = MiniTransformer(input_size=12+27+6, output_size=output_size, embed_size=512, hidden_size=2048, num_heads=4, max_sequence_length=750, num_layers=6, estimate_pose=False)
+        # self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        self.model = torch.jit.load(model_path)
         self.model = self.model.to(self.device)
         self.model.eval()
-        print(self.device)
     
     def predict(self, x):
-        with torch.no_grad():
+        with torch.inference_mode():
             x = x.to(self.device)
-            src_mask = torch.triu(torch.ones(self.sequence_length-1, self.sequence_length-1) * float('-inf'), diagonal=1).to(self.device)
+            # src_mask = torch.triu(torch.ones(self.sequence_length-1, self.sequence_length-1) * float('-inf'), diagonal=1).to(self.device)
+            src_mask = torch.triu(torch.ones(self.sequence_length-1, self.sequence_length-1), diagonal=1).bool().to(device)
             output = self.model(x, src_mask)
-            return output
+            return output.detach()
         
     
     # def infer_and_plot(self, data, save_path):
@@ -110,33 +115,53 @@ class FullInference:
         for step in range(pose.shape[1]):
             if mask[step, 0]:
                 ## only pose
-                patch_set = get_visualization(0, pose[:, step, :6]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), priv_info[:, step, :]*torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device), pred_pose[:, step, :6]* torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), pred_priv_info[:, step, :]*torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device), fsw[:, step, :].squeeze(1), estimate_pose=False)
+                patch_set = get_visualization(0, pose[:, step, :6]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), priv_info[:, step, :], pred_pose[:, step, :6]* torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=device), pred_priv_info[:, step, :]*torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=device), fsw[:, step, :].squeeze(1), estimate_pose=False)
+                # print(pose[:, step, :2], pred_pose[:, step, :2])
                 patches.append(patch_set)
         # save the patches using pickle
         with open(save_path, 'wb') as f:
             pickle.dump(patches, f)
 
 if __name__ == '__main__':
-    pass
+    # pass
     from glob import glob
     import numpy as np
     from pathlib import Path
     import random
     from tqdm import tqdm
-    POSE_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45')
-    PRIV_INFO_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_21-12-37')
-    SAVE_FOLDER = Path(f'./scene_predictor/decoupled_inference/1')
+    ###### works #######
+    POSE_FOLDER = Path(f'./scene_predictor/results_pose/transformer_750_2048/2023-06-03_22-11-43')
+    PRIV_INFO_FOLDER = Path(f'./scene_predictor/results_priv_info/transformer_750_2048/2023-06-03_22-26-56')
+    # PRIV_INFO_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_21-12-37')
+    device = 'cuda:0'
+    sequence_length = 750
+    full_inference = FullInference(pose_model_path=str(POSE_FOLDER/'checkpoints/model_29.pt'), obstacle_model_path=str(PRIV_INFO_FOLDER/'checkpoints/model_23.pt'), sequence_length=sequence_length, device=device)
+
+    #### works ########
+
+
+    # ###### works #######
+    # POSE_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45')
+    # PRIV_INFO_FOLDER = Path(f'./scene_predictor/results_priv_info/transformer_750_2048/2023-05-23_02-09-44')
+    # # PRIV_INFO_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_21-12-37')
+    # device = 'cuda:0'
+    # sequence_length = 750
+    # full_inference = FullInference(pose_model_path=str(POSE_FOLDER/'checkpoints/model_96.pt'), obstacle_model_path=str(PRIV_INFO_FOLDER/'checkpoints/model_91.pt'), sequence_length=sequence_length, device=device)
+    # #### works ########
+
+    # POSE_FOLDER = Path(f'./scene_predictor/results_pose/transformer_750_2048/2023-05-23_16-59-30')
+    # PRIV_INFO_FOLDER = Path(f'./scene_predictor/results_priv_info/transformer_750_2048/2023-05-23_19-46-22')
+    
+    SAVE_FOLDER = Path(f'./scene_predictor/decoupled_inference/5')
     SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
     PLOT_FOLDER = SAVE_FOLDER/'plots_inference'
     PLOT_FOLDER.mkdir(exist_ok=True)
-    sequence_length = 750
-    device = 'cuda:0'
-    files = sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data_1/only_random_seed_test_6_single_trajectories/*/*.npz'))
-    
     ctr = len(glob(str(PLOT_FOLDER/f'plots_*.pkl')))
-    random.shuffle(files)
 
-    full_inference = FullInference(pose_model_path=str(POSE_FOLDER/'checkpoints/model_96.pt'), obstacle_model_path=str(PRIV_INFO_FOLDER/'checkpoints/model_25.pt'), sequence_length=sequence_length, device=device)
-    for idx, file in tqdm(enumerate(files[:20])):
+    # files = sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data_1/only_random_seed_test_6_single_trajectories/*/*.npz'))
+    files = glob('/common/users/dm1487/legged_manipulation_data_store/temp/play_obs_data_2_single_trajectories/*/*.npz')
+    random.shuffle(files)
+    for idx, file in tqdm(enumerate(files[:5])):
         data = np.load(file)
         full_inference.infer_and_plot(data, PLOT_FOLDER/f'plots_{idx+ctr}.pkl')
+    

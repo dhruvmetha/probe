@@ -38,11 +38,17 @@ class HistoryWrapper(gym.Wrapper):
         self.obs_history[env_ids, :] = 0
         # self.env.obs_buf[env_ids, :] = 0
         return ret
+    
+    # def stand_still(self, env_ids):
+    #     zero_actions = torch.zeros(self.env.num_envs, self.env.num_actions, dtype=torch.float, device=self.env.device) 
+    #     obs, _, _, _ = self.env.step(zero_actions)
+    #     obs['obs_history'][]
 
     def reset(self):
         ret = super().reset()
         privileged_obs = self.env.get_privileged_observations()
         self.obs_history[:, :] = 0
+        # self.obs_history = torch.cat((self.obs_history[:, self.env.num_obs:], ret), dim=-1)
         return {"obs": ret, "privileged_obs": privileged_obs, "obs_history": self.obs_history}
 
 

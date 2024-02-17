@@ -4,6 +4,8 @@ import numpy as np
 import multiprocessing as mp
 from pathlib import Path
 from datetime import datetime
+from matplotlib import pyplot as plt
+import time
 
 
 from go1_gym.envs.base.base_task import BaseTask
@@ -23,15 +25,16 @@ from go1_gym.utils.math_utils import quat_apply_yaw
 # from scene_predictor.model import MiniTransformer
 from scene_predictor.inference import ObstacleInference
 from scene_predictor.inference import PoseInference
-
+from scene_predictor.visualization import get_visualization
 
 class Navigator(BaseTask):
-    def __init__(self, cfg: Cfg, sim_device, headless, num_envs=None, eval_cfg:Cfg=None, physics_engine="SIM_PHYSX", initial_dynamics_dict=None, save_data=False, use_localization_model=False, use_obstacle_model=True):
+    def __init__(self, cfg: Cfg, sim_device, headless, num_envs=None, eval_cfg:Cfg=None, physics_engine="SIM_PHYSX", initial_dynamics_dict=None, save_data=False, random_pose=False, use_localization_model=False, use_obstacle_model=True, inference_device='cuda:0', **kwargs):
         self.use_obstacle_model = use_obstacle_model
         self.use_localization_model = use_localization_model
         self.cfg = cfg
         self.eval_cfg = eval_cfg
         self.save_data = save_data
+        self.random_pose = random_pose
 
         if num_envs is not None:
             cfg.env.num_envs = num_envs
@@ -39,7 +42,7 @@ class Navigator(BaseTask):
 
         self.train_test_split = cfg.env.train_test_split
 
-        self.num_train_envs = max(1, int(self.num_envs * self.train_test_split))
+        self.num_train_envs = max(1, int(self.num_envs * self.train_test_split)) 
         self.num_eval_envs = self.num_envs - self.num_train_envs
 
         if self.save_data:
@@ -68,7 +71,18 @@ class Navigator(BaseTask):
 
         super().__init__(cfg, sim_params, physics_engine, sim_device, headless, eval_cfg)
 
-        self.inference_model_device = 'cuda:1'
+        self.inference_model_device = inference_device
+        if self.use_localization_model:
+            POSE_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45')
+            localization_model_path=str(POSE_FOLDER/'checkpoints/model_96.pt')
+            self.localization_inference = PoseInference(model_path=localization_model_path, sequence_length=750, device=self.inference_model_device)
+        
+        if self.use_obstacle_model:
+            # PRIV_INFO_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_16-57-15')
+            PRIV_INFO_FOLDER = Path(f'./scene_predictor/results_priv_info/transformer_750_2048/2023-05-23_02-09-44')
+            obstacle_model_path=str(PRIV_INFO_FOLDER/'checkpoints/model_91.pt')
+            self.obstacle_inference = ObstacleInference(model_path=obstacle_model_path, sequence_length=750, device=self.inference_model_device)
+
         self.__init_buffers()
 
         if not self.headless:
@@ -81,16 +95,7 @@ class Navigator(BaseTask):
 
         self._prepare_reward_function()
 
-        if self.use_obstacle_model:
-            PRIV_INFO_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_16-57-15')
-            obstacle_model_path=str(PRIV_INFO_FOLDER/'checkpoints/model_19.pt')
-            self.obstacle_inference = ObstacleInference(model_path=obstacle_model_path, sequence_length=750, device=self.inference_model_device)
 
-        if self.use_localization_model:
-            POSE_FOLDER = Path(f'./scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45')
-            localization_model_path=str(POSE_FOLDER/'checkpoints/model_96.pt')
-            self.localization_inference = PoseInference(model_path=localization_model_path, sequence_length=750, device=self.inference_model_device)
-        
     def _pre_create_env(self):
 
         self.env_origins = torch.zeros(self.num_envs, 3, device=self.device, requires_grad=False)
@@ -99,7 +104,7 @@ class Navigator(BaseTask):
 
         # self._call_train_eval(self._get_env_origins, torch.arange(self.num_envs, device=self.device))
 
-        self.legged_env = HistoryWrapper(VelocityTrackingEasyEnv(self.gym, self.sim, self.num_envs, LeggedCfg, self.sim_params, self.env_origins, device=self.device))
+        self.legged_env = HistoryWrapper(VelocityTrackingEasyEnv(self.gym, self.sim, self.num_envs, LeggedCfg, self.sim_params, self.env_origins, random_pose=self.random_pose, device=self.device))
         self.legged_env.pre_create_actor()
 
         self.world_env = WorldAsset(self.gym, self.sim, self.num_envs, self.env_origins, device=self.device, train_ratio=self.train_test_split)
@@ -111,7 +116,7 @@ class Navigator(BaseTask):
             env_lower = gymapi.Vec3(0., 0., 0.)
             env_upper = gymapi.Vec3(0., 0., 0.)
             env_handle = self.gym.create_env(self.sim, env_lower, env_upper, int(np.sqrt(self.num_envs)))
-            pos = self.env_origins[i]   
+            pos = self.env_origins[i]
 
             self.legged_env.create_actor(i, env_handle, pos)
             self.world_env.create_actor(i, env_handle, pos)
@@ -142,30 +147,63 @@ class Navigator(BaseTask):
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.int32)
         self.actions = torch.zeros(self.num_envs, self.num_actions, device=self.device, dtype=torch.float32)
         self.last_actions = torch.zeros(self.num_envs, self.num_actions, device=self.device, dtype=torch.float32)
-        self.commands = torch.zeros(self.num_envs, 10, device=self.device, dtype=torch.float32) + torch.tensor([0.0, 3.0, 0, 0, 0.5, 0.5, 0.08, 0.0, 0.0, 0.25], device=self.device)
-        self.gs_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
 
-        self.base_pos = torch.zeros(self.num_envs, 2, device=self.device, dtype=torch.float32)
+        body_height_cmd = 0.0
+        step_frequency_cmd = 3.0
+        gait = torch.tensor([0.5, 0, 0.0])
+        footswing_height_cmd = 0.08
+        pitch_cmd = 0.0
+        roll_cmd = 0.0
+        stance_width_cmd = 0.25
 
-        self.dones = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+        self.commands = torch.zeros(self.num_envs, 10, device=self.device, dtype=torch.float32) + torch.tensor([body_height_cmd, step_frequency_cmd, *gait, 0.5, footswing_height_cmd, pitch_cmd, roll_cmd, stance_width_cmd], device=self.device)
+        # gaits = {"pronking": [0, 0, 0],
+        #         "trotting": [0.5, 0, 0],
+        #         "bounding": [0, 0.5, 0],
+        #         "pacing": [0, 0, 0.5]}
+        
+        # body_height_cmd = 0.0
+        # step_frequency_cmd = 3.0
+        # gait = torch.tensor(gaits["trotting"])
+        # footswing_height_cmd = 0.1
+        # pitch_cmd = 0.0
+        # roll_cmd = 0.0
+        # stance_width_cmd = 0.3
 
-        self.success_envs = torch.zeros(self.num_envs, device=self.device, dtype=torch.int)
-        self.count_envs = torch.zeros(self.num_envs, device=self.device, dtype=torch.int)
+        # self.commands = torch.zeros(self.num_envs, 10, device=self.device, dtype=torch.float32) + torch.tensor([body_height_cmd, step_frequency_cmd, *gait, 0.5, footswing_height_cmd, pitch_cmd, roll_cmd, stance_width_cmd], device=self.device)
 
-        self.full_seen_world_obs = torch.zeros(self.num_envs, 21, device=self.device, dtype=torch.float32)
+        self.gs_buf = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.bool)
+
+        self.base_pos = torch.zeros(self.num_envs, 2, device=self.device, requires_grad=False, dtype=torch.float32)
+        self.base_yaw = torch.zeros(self.num_envs, 1, device=self.device, requires_grad=False, dtype=torch.float32)
+
+        self.dones = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.bool)
+
+        self.success_envs = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.int)
+        self.count_envs = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.int)
+
+        self.full_seen_world_obs = torch.zeros(self.num_envs, 21, device=self.device, requires_grad=False, dtype=torch.float32)
+        self.distance_travelled = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.float32)
+        self.last_base_pos = torch.zeros(self.num_envs, 2, device=self.device, requires_grad=False, dtype=torch.float32)
+        self.last_base_yaw = torch.zeros(self.num_envs, 1, device=self.device, requires_grad=False, dtype=torch.float32)
+
+        # self.num_collisions = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.int)
 
         self.goal_positions = self.legged_env.goal_positions
 
-        self.env_ids = torch.arange(self.num_envs, device=self.inference_model_device, dtype=torch.long).view(-1, 1)
-        self.env_step = torch.zeros(self.num_envs, 1, device=self.device, dtype=torch.long)
+        self.env_ids = torch.arange(self.num_envs, device=self.inference_model_device if self.use_localization_model or self.use_obstacle_model else self.device, requires_grad=False, dtype=torch.long).view(-1, 1)
+        self.env_step = torch.zeros(self.num_envs, 1, device=self.inference_model_device if self.use_localization_model or self.use_obstacle_model else self.device, requires_grad=False, dtype=torch.long)
 
-        self.priv_info_inp = torch.zeros(self.num_envs, 750, 12+3+24+6, device=self.inference_model_device, dtype=torch.float32)
-        self.pose_inp = torch.zeros(self.num_envs, 750, 27, device=self.inference_model_device, dtype=torch.float32)
+        if self.use_localization_model:
+            self.pose_inp = torch.zeros(self.num_envs, 750, 27, device=self.inference_model_device, requires_grad=False, dtype=torch.float32)
+        if self.use_obstacle_model:
+            self.priv_info_inp = torch.zeros(self.num_envs, 750, 12+3+24+6, device=self.inference_model_device, requires_grad=False, dtype=torch.float32)
 
     def set_camera(self, position, lookat):
         """ Set camera position and direction
         """
         cam_pos = gymapi.Vec3(position[0], position[1], position[2])
+        # cam_pos = gymapi.Vec3(position[0], position[1], position[2])
         cam_target = gymapi.Vec3(lookat[0], lookat[1], lookat[2])
         self.gym.viewer_camera_look_at(self.viewer, None, cam_pos, cam_target)
 
@@ -195,22 +233,35 @@ class Navigator(BaseTask):
         # print(self.obs_buf[0], self.legged_env.get_observations()['obs'][0])
 
         self.render_gui()
-
-        self.actions[:, :3] = torch.clamp(actions[:, :3], -0.65, 0.65)
+        
+        self.actions[:, 0:1] = torch.clamp(actions[:, 0:1], -0.4, 0.4)
+        self.actions[:, 1:2] = torch.clamp(actions[:, 1:2], -0.4, 0.4)
+        self.actions[:, 2:3] = torch.clamp(actions[:, 2:3], -0.4, 0.4)
+        # print(self.legged_env_obs['obs_history'][0])
 
         new_actions = torch.cat([self.actions, self.commands], dim=1)
-
+        
         for i in range(self.cfg.control.decimation):
             self.legged_env.set_commands(new_actions)
+            # print(new_actions)
+            legged_env_data = []
             with torch.no_grad():
                 self.legged_env_obs, _, _, extras = self.legged_env.step(self.legged_env.policy(self.legged_env_obs))
-
+                # print(self.legged_env_obs['obs_history'][0][-70+18:-68+18], extras['joint_pos'][0][:2], self.legged_env.default_dof_pos[0, :2])
+                legged_env_data.append({
+                    'joint_pos': extras['joint_pos'],
+                    'joint_vel': extras['joint_vel'],
+                    'torques': extras['torques'],
+                    'body_pos': extras['body_pos'],
+                })
+        
         self.extras.update({
             'legged_env': extras
         })
         
         env_ids = self.post_physics_step()
 
+        
         self.dones = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self.dones[env_ids] = True
 
@@ -220,6 +271,8 @@ class Navigator(BaseTask):
         # clip observations
 
         # clip privileged observations
+
+        
         
         return self.obs_buf, self.privileged_obs_buf, self.rew_buf, self.dones, self.extras
 
@@ -228,31 +281,42 @@ class Navigator(BaseTask):
         # if self.record_now:
         #     self.gym.step_graphics(self.sim)
         #     self.gym.render_all_camera_sensors(self.sim)
-
+        self.last_base_pos[:, :] = self.base_pos[:, :2].clone()
+        self.last_base_yaw[:, :] = self.base_yaw[:, :].clone()
+        
         self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
         self.base_quat = self.legged_env.base_quat[:, :].clone()
+        self.base_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
+        self.distance_travelled[:] += torch.norm(self.base_pos[:, :2] - self.last_base_pos[:, :2], dim=-1)
+        # print(self.distance_travelled.shape)
+        # self.num_collisions = self.legged_env
         self.episode_length_buf += 1
 
+        # print('diff in pos', self.base_pos[0, :2] - last_base_pos[0, :2])
         self.check_termination()
         self.compute_reward()
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
 
         self.reset_idx(env_ids)
-        self.compute_observations()
 
+        self.compute_observations()
+        # if 0 in env_ids:
+        #     print('2', self.legged_env.base_pos[0, :2], self.base_pos[0, :2])
         if self.record_now:
             self.gym.step_graphics(self.sim)
             self.gym.render_all_camera_sensors(self.sim)
         
         self.last_actions[:] = self.actions[:]
 
+        
         self._render_headless()
-
+        
         return env_ids
 
     def check_termination(self):
         self.time_out_buf = self.episode_length_buf >= self.max_episode_length
+        
         self.gs_buf = (torch.abs(self.base_pos[:, 0] - self.goal_positions)) < 0.1
         self.reset_buf |= self.time_out_buf
         self.reset_buf |= self.gs_buf
@@ -300,83 +364,153 @@ class Navigator(BaseTask):
 
     def compute_observations(self):
         self.env_step += 1
+        
         self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
         self.base_quat = self.legged_env.base_quat[:, :].clone()
 
-        if self.use_localization_model or self.use_obstacle_model:
-            torques = self.legged_env.torques[:, :].clone()
-            projected_gravity = self.legged_env.projected_gravity[:, :].clone()
-            joint_pos = self.legged_env.dof_pos[:, :].clone()
-            joint_vel = self.legged_env.dof_vel[:, :].clone()
-            self.pose_inp[self.env_ids, self.env_step, :] = torch.cat([projected_gravity, joint_pos, joint_vel], dim=-1).unsqueeze(1).to(self.inference_model_device)
+        torques = self.legged_env.torques[:, :].clone().to(self.inference_model_device)
 
-            self.priv_info_inp[self.env_ids, self.env_step, :-6] = torch.cat([torques, projected_gravity, joint_pos, joint_vel], dim=-1).unsqueeze(1).to(self.inference_model_device)
+        # projected_gravity = self.legged_env.projected_gravity[:, :].clone().to(self.inference_model_device)
+        
+        # joint_pos = ((self.legged_env.dof_pos[:, :] - self.legged_env.default_dof_pos) * self.legged_env.obs_scales.dof_pos).clone().to(self.inference_model_device)
+        
+        # joint_vel = self.legged_env.dof_vel[:, :].clone().to(self.inference_model_device) * self.legged_env.obs_scales.dof_vel
+
+        inp_obs = self.legged_env_obs['obs_history'][:, -70:].clone()
+        projected_gravity = inp_obs[:, :3]
+        joint_pos = inp_obs[:, 18:30]
+        joint_vel = inp_obs[:, 30:42]
+
+        # print(inp_obs[0][-70:])
+
+        # print(self.legged_env_obs['obs_history'][0][-70:], projected_gravity[0], joint_pos[0], joint_vel[0])
 
         if self.use_localization_model:
-            obs = (self.localization_inference.predict(self.pose_inp[:, 1:, :].clone())[self.env_ids, self.env_step-1, :]).squeeze(1)
+            # print()
+            self.pose_inp[self.env_ids, self.env_step, :] = torch.cat([projected_gravity, joint_pos, joint_vel], dim=-1).unsqueeze(1)
+            obs = (self.localization_inference.predict(self.pose_inp[:, 1:, :])[self.env_ids, self.env_step-1, :]).squeeze(1).to(self.device)
+
             obs = torch.cat([obs, self.actions.clone()], dim=-1)
 
-        else:
-            # if not self.use_scene_model:
+
             obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
 
             # setup obs buf and scale it to normalize observations
-            obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone()], dim = -1)
+            true_obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.base_lin_vel[:, :2], self.legged_env.base_ang_vel[:, 2:], self.actions.clone()], dim = -1)
+            scaling_vec = torch.tensor([0.33, 1], device=self.device)
 
+            # patch_set = get_visualization(0, true_obs[:, :6], None, obs[:, :6]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=obs.device), None, None, estimate_pose=True)
+            # print(len(patch_set))
+            # fig, ax = plt.subplots(nrows=1, ncols=1)
+            # ax.set_xlim(-1.0, 4.0)
+            # ax.set_ylim(-1.0, 1.0)
+            # ax.add_patch(patch_set[0])
+            # ax.add_patch(patch_set[1])
+            # plt.show()
+            
+        else:
+            # if not self.use_scene_model:
+            # obs_yaw = torch.atan2(2.0*(self.base_quat[:, 0]*self.base_quat[:, 1] + self.base_quat[:, 3]*self.base_quat[:, 2]), 1. - 2.*(self.base_quat[:, 1]*self.base_quat[:, 1] + self.base_quat[:, 2]*self.base_quat[:, 2])).view(-1, 1)
+
+            # print('obs yaw', obs_yaw[0]*1/3.14)
+            # setup obs buf and scale it to normalize observations #
+            # if np.random.uniform() > 0.05:
+            obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), self.base_yaw, self.legged_env.base_lin_vel[:, :2], self.actions.clone()], dim = -1)
+            scaling_vec = torch.tensor([0.25, 1, 1/3.14]  + [1/0.4, 1/0.4] + [1/0.4, 1/0.4, 1/0.4], device=self.device)
+            # else:
+            #     obs = torch.cat([((self.last_base_pos[:, :1])), (self.last_base_pos[:, 1:2]), self.last_base_yaw, self.legged_env.base_lin_vel[:, :2], self.actions.clone()], dim = -1)
+            #     scaling_vec = torch.tensor([0.25, 1, 1/3.14]  + [1/0.4, 1/0.4] + [1/0.4, 1/0.4, 1/0.4], device=self.device)
+            #########################################################
+
+            # print()
+
+            # ll_o
+        
+            # setup obs buf without vel and scale it to normalize observations #
+            # if np.random.uniform() > 0.05:
+            #     obs = torch.cat([((self.base_pos[:, :1] - self.env_origins[:, :1])), (self.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.actions.clone()], dim = -1)
+            #     scaling_vec = torch.tensor([0.25, 1, 1/3.14] + [1/0.4, 1/0.4, 1/0.4], device=self.device)
+            # else:
+            #     obs = torch.cat([((self.last_base_pos[:, :1])), (self.last_base_pos[:, 1:2]), obs_yaw, self.actions.clone()], dim = -1)
+            #     scaling_vec = torch.tensor([0.25, 1, 1/3.14, 1/0.4, 1/0.4, 1/0.4], device=self.device)
+            #########################################################
+
+            # setup obs buf with legged env torques without vel and scale it to normalize observations #
+            # obs = torch.cat([((self.base_pos[:, :1] - self.env_origins[:, :1])), (self.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.legged_env.torques, self.actions.clone()], dim = -1)
+            # scaling_vec = torch.tensor([0.25, 1, 1/3.14] + [0.08]*12 + [1/0.4, 1/0.4, 1/0.4], device=self.device)
+            #########################################################
+
+            # obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), obs_yaw, self.actions.clone()], dim = -1)
+            # scaling_vec = torch.tensor([0.25, 1, 1/3.14, 1/0.4, 1/0.4, 1/0.4], device=self.device)
+            
             # obs scaling or normalization
-            scaling_vec = torch.tensor([0.33, 1, 1/3.14, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65, 1/0.65], device=self.device)
             obs *= scaling_vec
+        
+            # obs[:, :6] += torch.randn_like(obs[:, :6]) * 0.05 * scaling_vec[:6]
 
         if self.use_obstacle_model:
+            # start = time.time()
+            self.priv_info_inp[self.env_ids, self.env_step, :-6] = torch.cat([torques, projected_gravity, joint_pos, joint_vel], dim=-1).unsqueeze(1).to(self.inference_model_device)
+
             self.priv_info_inp[self.env_ids, self.env_step, -6:] = obs[:, :6].unsqueeze(1).to(self.inference_model_device)
+
+            # start = time.time()
             priv_obs = self.obstacle_inference.predict(self.priv_info_inp[:, 1:, :].clone())[self.env_ids, self.env_step-1, :].squeeze(1)
+            # print("obstacle inference time: ", time.time() - start)
+            
             priv_obs[:, :7] = priv_obs[:, :7] * (torch.prod(priv_obs[:, 5:7], dim=-1) > 0.1).float().view(-1, 1)
             priv_obs[:, 7:14] = priv_obs[:, 7:14] * (torch.prod(priv_obs[:, 12:14], dim=-1) > 0.1).float().view(-1, 1)
             priv_obs[:, 14:21] = priv_obs[:, 14:21] * (torch.prod(priv_obs[:, 19:21], dim=-1) > 0.1).float().view(-1, 1)
-            self.privileged_obs_buf[:] = priv_obs.clone().to(self.device)
-            priv_obs = self.privileged_obs_buf.clone()
+            priv_obs = priv_obs.to(self.device)
+            self.privileged_obs_buf[:] = priv_obs[:]
+            # self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
+
+            # if torch.sum(priv_obs[0]) > 0:
+            #     frame = get_visualization(0, obs[:, :6]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=obs.device), self.world_env_obs, obs[:, :6]*torch.tensor([1/0.33, 1, 3.14, 0.65, 0.65, 0.65], device=obs.device), priv_obs*torch.tensor([1, 1, 1/0.33, 1, 3.14, 1, 1.7] * 3, device=priv_obs.device), self.full_seen_world_obs, estimate_pose=False)
+            #     print(len(frame))
+
+            #     fig, axes = plt.subplots(2, 2, figsize=(48, 24))
+            #     ax = axes.flatten()
+            #     pred_robot, robot, robot_1, robot_2, robot_3 = frame[0], frame[1], frame[2], frame[3], frame[4]
+
+            #     ax[0].add_patch(pred_robot)
+            #     ax[0].add_patch(robot)
+            #     ax[1].add_patch(robot_1)
+            #     ax[2].add_patch(robot_2)
+            #     ax[3].add_patch(robot_3)
+
+            #     ax[0].set(xlim=(-1.0, 4.0), ylim=(-1, 1), title='all', aspect='auto')
+            #     ax[1].set(xlim=(-1.0, 4.0), ylim=(-1, 1), title='truth', aspect='auto')
+            #     ax[2].set(xlim=(-1.0, 4.0), ylim=(-1, 1), title='predicted', aspect='auto')
+            #     ax[3].set(xlim=(-1.0, 4.0), ylim=(-1, 1), title='full seen world', aspect='auto')
+                
+            #     for i in range(2):
+            #         j = i*6 + 5
+            #         ax[0].add_patch(frame[j])
+            #         ax[0].add_patch(frame[j+1])
+
+            #         ax[1].add_patch(frame[j+3])
+            #         ax[2].add_patch(frame[j+4])
+
+            #         ax[3].add_patch(frame[j+5])
+                    
+            #     plt.show()
+            
+
         else:
+            
             # setup privileged obs buf and scale it to normalize observations
             self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
             self.privileged_obs_buf[:] = self.world_env_obs.clone()
             priv_obs = self.privileged_obs_buf.clone()
 
             # add scaled noise
-            # obs += torch.randn_like(obs) * 0.1 * scaling_vec
-            priv_obs *= torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
-        # priv_obs += torch.randn_like(priv_obs) * 0.1 *  torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3, device=self.device)
-        # priv_obs[:, :2] = torch.clamp(priv_obs[:, :2], min=0, max=1)
-        # priv_obs[:, 7:9] = torch.clamp(priv_obs[:, 7:9], min=-1, max=1)
-        # priv_obs[:, 14:16] = torch.clamp(priv_obs[:, 14:16], min=-1, max=1)
-
-        # priv_obs_noise_scale = 
-        # priv_obs = 
-
-        # else:
-
-        #     input_obs = self.legged_env.get_observations()['obs'].clone()
-        #     self.legged_obs_history[self.env_idx, self.env_step, :] = input_obs.unsqueeze(1)
-
-        #     model_obs = (self.get_inferred_obs()[self.env_idx, self.env_step, :]).squeeze(1)
             
-        #     obs = torch.cat([((model_obs[:, :1]) * 0.33), (model_obs[:, 1:2]), model_obs[:, 2:3] * (1/3.14), model_obs[:, 3:5] * (1/0.65), model_obs[:, 5:6] * (1/0.65), self.actions.clone()], dim = -1).clone()
+            priv_obs *= torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7, 1, 1] * 3, device=self.device)
             
-        #     priv_obs = model_obs[:, 6:].clone()
-        #     self.env_step += 1
-
-        # for r in range(3):
-        #     k = r * 7
-        #     priv_obs[:, k+2] = ((priv_obs[:, k+2]) * 0.33)
-        #     # priv_obs[:, 3:4] = (priv_obs[:, 3:4]) 
-        #     priv_obs[:, k+4] = (priv_obs[:, k+4]) * (1/3.14) # * ((priv_obs[:, k+4] != 0.0) * 1.0)
-        #     # priv_obs[:, 5:6] = ((priv_obs[:, 5:6]) * 0.33) 
-        #     priv_obs[:, k+6] = ((priv_obs[:, k+6]) * (1/ 1.7))
-        
         # add scaled noise
-        self.obs_buf[:] = torch.cat([obs.clone(), priv_obs.clone()], dim=-1)
-        # print(self.obs_buf[0, :2], self.obs_buf[0, 6:])
-
-        # self.obs_buf[:] = torch.cat([obs, priv_obs[:, :2], priv_obs[:, 2:3]*0.33, priv_obs[:, 3:4], priv_obs[:, 4:5] * (1/3.14), priv_obs[5:6]], dim=-1)
+        
+        self.obs_buf[:] = torch.cat([obs], dim=-1)
 
     def get_privileged_obs(self):
         return self.privileged_obs_buf
@@ -387,6 +521,8 @@ class Navigator(BaseTask):
     def reset(self):
         self.legged_env_obs = self.legged_env.reset()
         self.world_env_obs, self.full_seen_world_obs = self.world_env.reset()
+        self.reset_idx(torch.arange(self.num_envs, device=self.device, requires_grad=False, dtype=torch.long))
+        # self.reset_video_camera()
         # self.step(torch.zeros_like(self.actions))
         self.base_pos[:, :] = self.legged_env.base_pos[:, :2] - self.env_origins[:, :2]
         # self.goal_positions[self.base_pos[:, 0] < 1.5] = 3.2
@@ -400,10 +536,22 @@ class Navigator(BaseTask):
 
         if len(env_ids) == 0:
             return
+        
+        train_env_ids = env_ids[env_ids < self.num_train_envs]
+        for env_id in train_env_ids:
+            # print(env_id, self.world_env.inplay[env_id.item()])
+            self.world_env.world_types_success[self.world_env.inplay[env_id.item()].item()] += self.gs_buf[env_id.item()] * 1
+            self.world_env.world_types_count[self.world_env.inplay[env_id.item()].item()] += 1
+
         self.legged_env.reset_idx(env_ids)
         self.legged_env.compute_observations()
+
+        
         self.world_env.reset_idx(env_ids)
         self.world_env_obs, self.full_seen_world_obs = self.world_env.get_block_obs()
+
+        # self.legged_env.stand_still(env_ids)
+
         
         self.reset_video_camera(env_ids)
 
@@ -418,8 +566,15 @@ class Navigator(BaseTask):
                     self.episode_sums[key][train_env_ids])
                 
                 self.episode_sums[key][train_env_ids] = 0.
-            if torch.sum(self.count_envs[0:self.num_train_envs] > 0) == self.num_train_envs:
-                self.extras["train/episode"]['success_rate'] = torch.mean(self.success_envs[0:self.num_train_envs] / self.count_envs[0:self.num_train_envs])
+            # if torch.sum(self.count_envs[0:self.num_train_envs] > 0) == self.num_train_envs:
+                # self.extras["train/episode"]['success_rate'] = self.success_envs[0:self.num_train_envs] / self.count_envs[0:self.num_train_envs]
+                # print("success rate for all envs is ", torch.mean(self.success_envs[0:self.num_train_envs] / self.count_envs[0:self.num_train_envs]))
+            
+            # for k, v in d_env.world_types_count.items():
+            #     if self.world_env.world_types_count[k] > 10:
+            #         print("success rate for world type ", k, " is ", self.world_env.world_types_success[k] / self.world_env.world_types_count[k])
+            #         self.world_env.world_types_count[k] = 0
+            #         self.world_env.world_types_success[k] = 0
 
         eval_env_ids = env_ids[env_ids >= self.num_train_envs]
         if len(eval_env_ids) > 0:
@@ -431,45 +586,66 @@ class Navigator(BaseTask):
                 unset_eval_envs = eval_env_ids[self.episode_sums_eval[key][eval_env_ids] == -1]
                 self.episode_sums_eval[key][unset_eval_envs] = self.episode_sums[key][unset_eval_envs]
                 self.episode_sums[key][eval_env_ids] = 0.
-            if torch.sum(self.count_envs[self.num_train_envs:] > 0) == self.num_eval_envs:
-                self.extras["eval/episode"]['success_rate'] = torch.mean(self.success_envs[self.num_train_envs:] / self.count_envs[self.num_train_envs:])
+            # if torch.sum(self.count_envs[self.num_train_envs:] > 0) == self.num_eval_envs:
+            #     self.extras["eval/episode"]['success_rate'] = self.success_envs[self.num_train_envs:] / self.count_envs[self.num_train_envs:]
 
         self.reset_buf[env_ids] = False
         self.gs_buf[env_ids] = False
         self.episode_length_buf[env_ids] = 0
         self.last_actions[env_ids] = 0.
         self.env_step[env_ids] = 0
-        self.priv_info_inp[env_ids, :, :] = 0.
+        self.base_yaw[env_ids] = 0.
+        self.distance_travelled[env_ids] = 0.
+        self.base_pos[env_ids, :] = 0.
+        self.last_base_pos[env_ids, :] = 0.
+        self.last_base_yaw[env_ids, :] = 0.
 
+        if self.use_localization_model:
+            self.pose_inp[env_ids, :, :] = 0.
+        if self.use_obstacle_model:
+            self.priv_info_inp[env_ids, :, :] = 0.
         # print(self.goal_positions[env_ids])
 
         # if count envs for every env is greater than 10, reset counts to 0 and success to 0
-        if torch.sum(self.count_envs[:self.num_train_envs] > 10) == self.num_train_envs:
+        text_arr = []
+        if torch.sum(self.count_envs[:self.num_train_envs] > 0) == self.num_train_envs:
+            for k, v in self.world_env.world_types_count.items():
+                if self.world_env.world_types_count[k] > 0:
+                    # if k == 0:
+                    #     if (self.world_env.world_types_success[k] / self.world_env.world_types_count[k]).item() > 0.95:
+                    #         self.world_env.world_sampling_dist[1] += 1.0
+                    #         self.world_env.world_sampling_dist[0] = self.world_env.world_sampling_dist[0]/(self.world_env.world_sampling_dist[0] + self.world_env.world_sampling_dist[1])
+                    #         self.world_env.world_sampling_dist[1] = 1.0 - self.world_env.world_sampling_dist[0]
+
+                    text_arr.append(f'{k}: ' + str((self.world_env.world_types_success[k] / self.world_env.world_types_count[k]).item()))
+                    
+            text_arr.append('train: ' + str((torch.sum(self.success_envs[:self.num_train_envs]) / torch.sum(self.count_envs[:self.num_train_envs])).item()))
+
             self.count_envs[:self.num_train_envs] = 0
             self.success_envs[:self.num_train_envs] = 0
 
-        if torch.sum(self.count_envs[self.num_train_envs:] > 10) == self.num_eval_envs:
+            for k, v in self.world_env.world_types_count.items():
+                self.world_env.world_types_count[k] = 0
+                self.world_env.world_types_success[k] = 0
+
+                    
+        if torch.sum(self.count_envs[self.num_train_envs:] > 0) == self.num_eval_envs:
+            text_arr.append('eval: ' + str((torch.sum(self.success_envs[self.num_train_envs:]) / torch.sum(self.count_envs[self.num_train_envs:])).item()))
             self.count_envs[self.num_train_envs:] = 0
             self.success_envs[self.num_train_envs:] = 0
 
+        if len(text_arr) > 0:
+            print(', '.join(text_arr))
+
+        
+        return self.obs_buf, self.privileged_obs_buf
+
     def _parse_cfg(self, cfg:Cfg):
-        self.dt = self.cfg.control.decimation * 4 * self.sim_params.dt
+        self.dt = self.cfg.control.decimation * 4 * self.sim_params.dt # (2 * 4 * 0.005 = 0.04s) -> 100/4 = 25Hz
         self.obs_scales = self.cfg.obs_scales
         self.reward_scales = vars(self.cfg.reward_scales)
-        # self.curriculum_thresholds = vars(self.cfg.curriculum_thresholds)
-        # cfg.command_ranges = vars(cfg.commands)
-        # if cfg.terrain.mesh_type not in ['heightfield', 'trimesh']:
-        #     cfg.terrain.curriculum = False
-        max_episode_length_s = cfg.env.episode_length_s
-        cfg.env.max_episode_length = np.ceil(max_episode_length_s / self.dt)
+        
         self.max_episode_length = cfg.env.max_episode_length
-        self.max_episode_length = 749
-
-        # cfg.domain_rand.push_interval = np.ceil(cfg.domain_rand.push_interval_s / self.dt)
-        # cfg.domain_rand.rand_interval = np.ceil(cfg.domain_rand.rand_interval_s / self.dt)
-        # cfg.domain_rand.gravity_rand_interval = np.ceil(cfg.domain_rand.gravity_rand_interval_s / self.dt)
-        # cfg.domain_rand.gravity_rand_duration = np.ceil(cfg.domain_rand.gravity_rand_interval * cfg.domain_rand.gravity_impulse_duration)
-
 
 
     def _get_env_origins(self, env_ids):
@@ -482,7 +658,7 @@ class Navigator(BaseTask):
         xx, yy = xx.to(device=self.device), yy.to(device=self.device)
         spacing = self.cfg.env.env_spacing
         self.env_origins[env_ids, 0] = spacing * xx.flatten()[:len(env_ids)]
-        self.env_origins[env_ids, 1] = spacing * yy.flatten()[:len(env_ids)]
+        self.env_origins[env_ids, 1] = spacing//2 * yy.flatten()[:len(env_ids)]
         self.env_origins[env_ids, 2] = 0.
 
     
@@ -504,6 +680,9 @@ class Navigator(BaseTask):
         bx, by, bz = self.legged_env.base_pos[0, 0], self.legged_env.base_pos[0, 1], self.legged_env.base_pos[0, 2]
         self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(bx, by - 1.0, bz + 1.0),
                                      gymapi.Vec3(bx, by, bz))
+        
+        # self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(0.1, 0.2, 3.0),
+        #                              gymapi.Vec3(0.0, 0.0, 0.5))
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
         img = self.gym.get_camera_image(self.sim, self.envs[0], self.rendering_camera, gymapi.IMAGE_COLOR)
@@ -512,12 +691,16 @@ class Navigator(BaseTask):
 
     def _render_headless(self):
         if self.record_now and self.complete_video_frames is not None and len(self.complete_video_frames) == 0:
+            
             bx, by, bz = self.legged_env.base_pos[0, 0], self.legged_env.base_pos[0, 1], self.legged_env.base_pos[0, 2]
             self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(bx - 1.0, by, bz + 2.0),
                                          gymapi.Vec3(bx, by, bz))
+            # self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(0.1, 0.2, 3.0),
+            #                          gymapi.Vec3(0.0, 0.0, 0.5))
             self.video_frame = self.gym.get_camera_image(self.sim, self.envs[0], self.rendering_camera,
                                                          gymapi.IMAGE_COLOR)
             self.video_frame = self.video_frame.reshape((self.camera_props.height, self.camera_props.width, 4))
+
             self.video_frames.append(self.video_frame)
 
         if self.record_eval_now and self.complete_video_frames_eval is not None and len(
@@ -540,8 +723,8 @@ class Navigator(BaseTask):
         # if recording video, set up camera
         if self.cfg.env.record_video:
             self.camera_props = gymapi.CameraProperties()
-            self.camera_props.width = 360
-            self.camera_props.height = 240
+            self.camera_props.width = 1280
+            self.camera_props.height = 720
             self.rendering_camera = self.gym.create_camera_sensor(self.envs[0], self.camera_props)
             self.gym.set_camera_location(self.rendering_camera, self.envs[0], gymapi.Vec3(1.5, 1, 3.0),
                                          gymapi.Vec3(0, 0, 0))
