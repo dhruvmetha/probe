@@ -12,7 +12,7 @@ FFwriter = animation.FFMpegWriter
 estimate_pose = False
 # RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/results_{"results_1_obs_pe" if estimate_pose else "priv_info"}/*/*'), key=os.path.getmtime)[-1]
 
-RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/final_results_2_obs_se/*'))[-1]
+RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/results/transformer/*'))[-1]
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results_1_obs_se/2023-08-24_09-28-10'
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45'
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_750_2048/2023-05-20_15-21-17'
@@ -23,7 +23,7 @@ source_folder = f"{RECENT_MODEL}/viz"
 dest_folder = f"{RECENT_MODEL}/animations"
 if not os.path.exists(dest_folder):
     os.makedirs(dest_folder)
-RECTS = 3
+RECTS = 2
 
 def on_new_file(tmp_img_path, save_to=None):
 
@@ -79,7 +79,7 @@ def on_new_file(tmp_img_path, save_to=None):
         last_patch.extend(frame)
     
 
-    num_patches = min(250, len(patches))
+    num_patches = min(1000, len(patches))
     anim = animation.FuncAnimation(fig, animate, frames=patches[:num_patches], interval=10, repeat=False)
     if save_to is None:
         anim.save(f"{dest_folder}/{file_name}.mp4", writer = FFwriter(20))

@@ -15,7 +15,7 @@ if __name__ == "__main__":
     logger.configure(logger.utcnow(f'high_level_policy/%Y-%m-%d/{stem}/%H%M%S.%f'),
                      root=Path(f"{MINI_GYM_ROOT_DIR}/runs").resolve(), )
 
-    SEED = 101
+    SEED = 45
     np.random.seed(SEED)
     torch.manual_seed(SEED)
     random.seed(SEED)
@@ -23,11 +23,12 @@ if __name__ == "__main__":
     Cfg.env.max_episode_length = 1499
     Cfg.env.num_observation_history = 750
     Cfg.env.num_observations = 8
-    save_data = True
+    obs = "2_obs"
+    save_data = False
     headless = True
 
     env = Navigator(Cfg, sim_device='cuda:0', headless=headless, random_pose=False, use_localization_model=False, use_obstacle_model=False, inference_device='cuda:0')
-    env = NavigationHistoryWrapper(env, save_data=save_data, save_folder=f'iros24/2_obs/data_store_set_{SEED}')
+    env = NavigationHistoryWrapper(env, save_data=save_data, save_folder=f'iros24/{obs}/data_store_set_{SEED}')
 
     gpu_id = 0
     runner = Runner(env, device=f"cuda:{gpu_id}")

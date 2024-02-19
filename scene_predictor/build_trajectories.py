@@ -79,15 +79,15 @@ if __name__ == '__main__':
     # all_files = glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/final_illus/*/*.npz") # + glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/sep16/*lag_6*/*/*.npz")
     # all_files = glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/final_illus/*/*.npz") # + glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/sep16/*lag_6*/*/*.npz")
     # SEED = 20
-    all_files = glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/iros24/*/*/*/*.npz") # + glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/sep16/*lag_6*/*/*.npz")
+    all_files = glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/iros24_play/2_obs/*_20*/*/*.npz") # + glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/sep16/*lag_6*/*/*.npz")
 
-    # print(len(all_files))
+    print(len(all_files))
     # exit()
     
     small_set = []
     small_set += all_files
-    random.shuffle(small_set)
+    random.shuffle(small_set) 
 
-    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/all_data')
+    dest_path = Path(f'/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_0/all_data')
     dest_path.mkdir(parents=True, exist_ok=True)
     main(small_set, dest_path)

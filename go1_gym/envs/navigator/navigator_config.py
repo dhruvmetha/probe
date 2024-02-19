@@ -276,48 +276,13 @@ class Cfg(PrefixProto, cli=False):
 
     class reward_scales(ParamsProto, cli=False):
 
-        # terminal rewards
-        # terminal_distance_gs = 0.0
-
-        # step rewards
-        # action_energy = -0.1 # -0.1
-        # action_rate = -0.001
-        # collision = -0.005
-        # zero_velocity = -0.01
-        # time = -0.001
-        
-        # side_limits = -0.01
-        # back_limits = -0.01
-
-        # working for 2 obstacles:
-        # terminal rewards
-        # terminal_time_out = -5.0 # -5.0
-
-        # # step rewards
-        # action_energy = -0.1 # -0.1
-        # action_rate = -0.001
-        # collision = -0.01
-        # zero_velocity = -0.05
-        # time = -0.01
-
-        # terminal_time_out = -1. # -5.0
-        # terminal_distance_gs = 1.0
-        # # torque_energy = -5e-8
-        # # distance = -5e-5
-        # norm_distance = 1.
-        # time = -0.01
-
-
         terminal_time_out = -1.0 # -5.0
         terminal_distance_gs = 10.0
-        # terminal_distance_travelled = 0.5
-        # terminal_time_taken = 3.0
-        # terminal_num_collisions = 0.5
-        # torque_energy = -5e-5
-        distance = -0.0 # -1e-3
-        # norm_distance = 1.0
-        # time = -1e-1
-        # collision = -0.1
+       
+        # distance = -0.01 # -1e-3
+        time = -0.01
+        side_limits = -0.05
+        heading = -0.05
         
     class normalization(PrefixProto, cli=False):
         clip_observations = 100.

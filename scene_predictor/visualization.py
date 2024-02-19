@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from matplotlib import animation
 # from indep_model.config import *
 FFwriter = animation.FFMpegWriter
-RECTS = 3
+RECTS = 2
 def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=False):
 
     obs = obs.cpu()
@@ -32,9 +32,9 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
     if not estimate_pose:
         for i in range(RECTS):
             fsw_j = i*7 + 2
-            j = i*8 + 3
+            j = i*7 + 2
             
-            confidence = torch.sigmoid(pred[idx][j-3]).item()
+            # confidence = torch.sigmoid(pred[idx][j-3]).item()
             contact = torch.sigmoid(pred[idx][j-2])
             # alpha = 0.3 if contact.item() < 0.5 else 0.8
             movable = torch.sigmoid(pred[idx][j-1])
@@ -63,7 +63,7 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
             for _ in range(2):
                 patch_set.append(pch.Rectangle(pos - size/2, *(size), angle=angle, rotation_point='center', facecolor=block_color, label=f'true_mov_{i}'))
 
-                if True or np.prod(size_pred) > 0.05:
+                if np.prod(size_pred) > 0.05:
                     
                     patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *(size_pred), angle=angle_pred, rotation_point='center', facecolor=pred_block_color,  label=f'pred_mov_{i}'))
 

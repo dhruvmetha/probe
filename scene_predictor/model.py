@@ -27,7 +27,7 @@ class MiniTransformer(nn.Module):
         
         self.dropout = nn.Dropout(0.2)
 
-        self.out = nn.ModuleList([nn.Sequential(nn.Linear(embed_size, 64), nn.ELU(), nn.Dropout(0.2), nn.Linear(64, 8)) for _ in range(3)])
+        self.out = nn.ModuleList([nn.Sequential(nn.Linear(embed_size, 64), nn.ELU(), nn.Dropout(0.2), nn.Linear(64, 7)) for _ in range(2)])
         self.estimate_pose = estimate_pose
     
     def forward(self, x, src_mask=None):

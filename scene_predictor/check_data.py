@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # # files = glob(str(dest_path1/'*/*/*.npz')) 
     # print(len(balanced_data))
 
-    files = glob(f'/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play/*/*/*/*.npz')
+    files = glob(f'/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/all_data/*/*.npz')
 
     # print(len(files))
     # exit()

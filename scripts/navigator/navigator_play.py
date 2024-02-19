@@ -40,6 +40,7 @@ if __name__ == "__main__":
     # model_path = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2023-09-01/navigator_train/201005.149004'
     
     # model_path = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-15/navigator_train/050540.754504' # 050321.571692, 050540.754504
+    recent_runs = ['/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-18/navigator_train/035410.215673'] # 050321.571692, 050540.754504
 
     
 
@@ -53,35 +54,36 @@ if __name__ == "__main__":
     #         if hasattr(Cfg, key):
     #             for key2, value2 in cfg[key].items():
     #                 setattr(getattr(Cfg, key), key2, value2)
-    SEED = 150
+    SEED = 203
     np.random.seed(SEED)
     torch.manual_seed(SEED)
     random.seed(SEED)
     
-    Cfg.env.num_envs = 5
+    Cfg.env.num_envs = 2048
     Cfg.env.max_episode_length = 1499
     Cfg.env.num_observation_history = 750
     Cfg.env.num_observations = 8
-    save_data = False
-    headless = False
+    save_data = True
+    headless = True
+    obs_name = '2_obs'
 
     env = Navigator(Cfg, sim_device='cuda:0', headless=headless, random_pose=False, use_localization_model=False, use_obstacle_model=False, inference_device='cuda:0')
-    env = NavigationHistoryWrapper(env, save_data=save_data, save_folder=f'iros24_play/1_obs/data_store_set_{SEED}')
+    env = NavigationHistoryWrapper(env, save_data=save_data, save_folder=f'iros24_play/{obs_name}/data_store_set_{SEED}')
     obs = env.reset()
     for model_path in recent_runs[:]:
         # obs = env.reset()
         print(model_path)
         logger.configure(Path(model_path).resolve())
         policy = load_policy(env)
-        total_dones = 3
+        total_dones = 20000
         dones_ctr = 0
         progress_bar = tqdm(total=total_dones)
         
         # while True:
         for _ in range(Cfg.env.max_episode_length * 10):
-            # if dones_ctr >= total_dones:
-            #     progress_bar.close()
-            #     break
+            if dones_ctr >= total_dones:
+                progress_bar.close()
+                break
             patches = []
             with torch.no_grad():
                 actions = policy(obs['obs_history'], obs['privileged_obs'])

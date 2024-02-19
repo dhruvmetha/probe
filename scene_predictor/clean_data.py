@@ -12,10 +12,18 @@ def remove_files(files, here):
     for file in tqdm(files):
         try:
             data = np.load(file)
-        except:
-            print(file)
-            os.remove(file)
 
+        except:
+            print('file_error', file)
+            try:
+                os.remove(file)
+            except:
+                pass
+            continue
+
+        if data['target'][10, 0] == 0. and data['target'][10, 1] == 0.:
+            print('pose error', file)
+            os.remove(file)
 
 def main(all_files):
     num_workers = 24
@@ -61,7 +69,9 @@ if __name__ == '__main__':
     # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1')
 
     # files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/aug27/2_obs/1/*/*.npz')
-    files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/test/0/*/*.npz')
+    files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/all_data/*/*.npz')
+    # with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:
+    #     files = pickle.load(f)
     print(len(files))
     main(files)
     

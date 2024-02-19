@@ -49,12 +49,20 @@ class CoRLRewards:
     def _reward_collision(self):
         # Penalize collisions on selected bodies
         return torch.sum(1. * (torch.norm(self.env.legged_env.contact_forces[:, self.env.legged_env.penalised_contact_indices, :], dim=-1) > 0.1), dim=1)
-
+    
     def _reward_side_limits(self):
-        cross = torch.zeros(self.env.robot_bounding_box[0].shape[0], device=self.env.robot_bounding_box[0].device)
-        for i in range(4):
-            cross[:] += ((torch.abs(self.env.robot_bounding_box[i][:, 1]) > 0.95) * 1.0)
-        return (cross > 0) * 1.0
+        # if the robot center y axis is outside the limits of -0.65 and 0.65
+        return (torch.abs(self.env.base_pos[:, 1]) > 0.65) * 1.0
+    
+    def _reward_heading(self):
+        # Penalize deviation from the goal heading
+        return (torch.abs(self.env.base_yaw[:, 0]) > 0.35) * 1.0
+
+    # def _reward_side_limits(self):
+    #     cross = torch.zeros(self.env.robot_bounding_box[0].shape[0], device=self.env.robot_bounding_box[0].device)
+    #     for i in range(4):
+    #         cross[:] += ((torch.abs(self.env.robot_bounding_box[i][:, 1]) > 0.95) * 1.0)
+    #     return (cross > 0) * 1.0
 
     def _reward_back_limits(self):
         cross = torch.zeros(self.env.robot_bounding_box[0].shape[0], device=self.env.robot_bounding_box[0].device)

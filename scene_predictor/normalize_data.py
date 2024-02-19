@@ -52,24 +52,26 @@ def balance_data(files, dest_path):
             data = np.load(file)
             last_idx = data['done'].nonzero()[0][-1]
             target = data['target_env']
-            index_found = int(int(target[last_idx, 2] != 0) + int(target[last_idx, 9] != 0) + int(target[last_idx, 16]!= 0))
+            index_found = int(int(target[last_idx, 2] != 0) + int(target[last_idx, 9] != 0)) # + int(target[last_idx, 16]!= 0))
             data_ctr[index_found].append(file)
 
-            # if index_found == 1:
-            #     if int(target[last_idx, 2] != 0):
-            #         if target[last_idx, 3] > 0:
-            #             # right side immovable
-            #             data_1['mov']['left'].append(file)
-            #         else:
-            #             # left side immovable
-            #             data_1['mov']['right'].append(file)
-            #     else:
-            #         if target[last_idx, 10] > 0:
-            #             # right side immovable
-            #             data_1['imm']['left'].append(file)
-            #         else:
-            #             # left side immovable
-            #             data_1['imm']['right'].append(file)
+            if index_found == 1:
+                if int(target[last_idx, 2] != 0):
+                    mv_files.append(file)
+                    if target[last_idx, 3] > 0:
+                        # right side immovable
+                        data_1['mov']['left'].append(file)
+                    else:
+                        # left side immovable
+                        data_1['mov']['right'].append(file)
+                else:
+                    imm_files.append(file)
+                    if target[last_idx, 10] > 0:
+                        # right side immovable
+                        data_1['imm']['left'].append(file)
+                    else:
+                        # left side immovable
+                        data_1['imm']['right'].append(file)
 
             # if index_found == 2:
             #     if target[last_idx, 3] > 0:
@@ -132,6 +134,8 @@ def balance_data(files, dest_path):
         0: data_ctr[0],
         1: data_ctr[1],
         2: data_ctr[2],
+        'mv': mv_files,
+        'imm': imm_files,
     }
 
     # count = min(len(data_ctr[0]), len(data_ctr[1]), len(data_ctr[2]))
@@ -173,8 +177,6 @@ def main(all_files, dest_path):
         worker.join()
 
 
-
-
 if __name__ == '__main__':
 
     # files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/aug27/2_obs/1/*/*.npz')
@@ -183,7 +185,7 @@ if __name__ == '__main__':
     id = 1
     save_id = 0
 
-    main_folder = '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24'
+    main_folder = '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_0'
     data_folder = f'{main_folder}/all_data'
     tmp_folder = f'{main_folder}/tmp'
     balance_folder = f'{main_folder}/balanced'
@@ -194,12 +196,11 @@ if __name__ == '__main__':
 
     # files = glob(f'/common/users/dm1487/legged_manipulation_data_store/trajectories/sep16/2_obs/{id}/*/*.npz') 
     files = glob(f'{data_folder}/*/*.npz') 
-    random.shuffle(files)
     print(len(files))
+    random.shuffle(files)
 
     dest_path = Path(f'{tmp_folder}/{save_id}')
-    main(files[:20000], dest_path)
-
+    main(files[:], dest_path)
 
     combine_files = sorted(glob(f'{str(dest_path)}/*.pkl'))
 
@@ -207,6 +208,8 @@ if __name__ == '__main__':
         0: [],
         1: [],
         2: [], 
+        # 'mv': [],
+        # 'imm': [],
     }
     for file in combine_files[:]:
         with open(file, 'rb') as f:
@@ -214,7 +217,11 @@ if __name__ == '__main__':
             all_files[0] += data[0]
             all_files[1] += data[1]
             all_files[2] += data[2]
+            all_files['mv'] += data['mv']
+            all_files['imm'] += data['imm']
     
+    min_len = min(len(all_files['mv']), len(all_files['imm']))
+    # data_len = min(len(all_files[0]), len(all_files[1]), len(all_files[2]))
     for key in all_files.keys():
         print(key, len(all_files[key]))
 
@@ -223,7 +230,10 @@ if __name__ == '__main__':
     
     for key in all_files.keys():
         with open(f'{balance_folder}/train_{key}.pkl', 'wb') as f:
-            pickle.dump(all_files[key], f)
+            if key == 'mv' or key == 'imm':
+                pickle.dump(all_files[key][:min_len], f)
+            else:
+                pickle.dump(all_files[key][:], f)
 
     shutil.rmtree(tmp_folder)
 

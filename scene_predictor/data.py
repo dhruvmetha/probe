@@ -32,24 +32,24 @@ class TransformerDataset(Dataset):
 
         # inp = torch.cat([projected_gravity, joint_pos, joint_vel, torques, pose[1:self.sequence_length-1, :], actions], dim=-1) # 3 + 12 + 12 + 12 + 6 + 3 = 48
         
-        if self.estimate_pose:
-            pose_diff = pose[1:self.sequence_length-1, :2] - pose[:self.sequence_length-2, :2]
-            inp = torch.cat([projected_gravity, joint_pos, joint_vel, pose], dim=-1) # 3 + 12 + 12 + 12 + 6 + 3 = 48
-            target = torch.cat([pose_diff, pose[:, 2]], dim=-1)
-            print(target.shape)
-        else:
+        # if self.estimate_pose:
+        #     pose_diff = pose[1:self.sequence_length-1, :2] - pose[:self.sequence_length-2, :2]
+        #     inp = torch.cat([projected_gravity, joint_pos, joint_vel, pose], dim=-1) # 3 + 12 + 12 + 12 + 6 + 3 = 48
+        #     target = torch.cat([pose_diff, pose[:, 2]], dim=-1)
+        #     print(target.shape)
+        # else:
 
             # inp = torch.cat([torques, projected_gravity, joint_pos, joint_vel, pose], dim=-1) # 3 + 12 + 12 + 12 + 6 + 3 = 48
-            inp = torch.cat([torques, projected_gravity, joint_pos, joint_vel, pose], dim=-1) # 3 +_12 + 12 + 6 = 33
+        inp = torch.cat([torques, projected_gravity, joint_pos, joint_vel, pose], dim=-1) # 3 +_12 + 12 + 6 = 33
         
-            # target data
-            
-            # target_joint_pos = torch.tensor(data['input'][2:self.sequence_length, 18:30])
-            # target_joint_vel = torch.tensor(data['input'][2:self.sequence_length, 30:42])
-            target_pose = torch.tensor(data['target'][2:self.sequence_length, :6])
-            target_priv_info = torch.tensor(data['target'][2:self.sequence_length, 6:])
-            # target = torch.cat([target_pose, target_priv_info], dim=-1)
-            target = torch.cat([priv_info * torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3)], dim=-1)
+        # target data
+        
+        # target_joint_pos = torch.tensor(data['input'][2:self.sequence_length, 18:30])
+        # target_joint_vel = torch.tensor(data['input'][2:self.sequence_length, 30:42])
+        # target_pose = torch.tensor(data['target'][2:self.sequence_length, :6])
+        # target_priv_info = torch.tensor(data['target'][2:self.sequence_length, 6:])
+        # target = torch.cat([target_pose, target_priv_info], dim=-1)
+        target = torch.cat([priv_info * torch.tensor([1, 1, 0.33, 1, 1/3.14, 1, 1/1.7] * 3)], dim=-1)
 
         # delta prediction target
         # target = torch.cat([target_pose - pose[:self.sequence_length-1]], dim=-1)
