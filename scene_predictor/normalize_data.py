@@ -52,7 +52,7 @@ def balance_data(files, dest_path):
             data = np.load(file)
             last_idx = data['done'].nonzero()[0][-1]
             target = data['target_env']
-            index_found = int(int(target[last_idx, 2] != 0) + int(target[last_idx, 9] != 0)) # + int(target[last_idx, 16]!= 0))
+            index_found = int(int(target[last_idx, 2] != 0) + int(target[last_idx, 11] != 0)) # + int(target[last_idx, 16]!= 0))
             data_ctr[index_found].append(file)
 
             if index_found == 1:
@@ -185,7 +185,11 @@ if __name__ == '__main__':
     id = 1
     save_id = 0
 
-    main_folder = '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_0'
+    root_path = '/common/users/dm1487/legged_manipulation_data_store'
+    root_traj_path = f'{root_path}/trajectories'
+    sub_path = 'iros24_play_feb21/2_obs'
+
+    main_folder = f'{root_traj_path}/{sub_path}'
     data_folder = f'{main_folder}/all_data'
     tmp_folder = f'{main_folder}/tmp'
     balance_folder = f'{main_folder}/balanced'
@@ -208,8 +212,8 @@ if __name__ == '__main__':
         0: [],
         1: [],
         2: [], 
-        # 'mv': [],
-        # 'imm': [],
+        'mv': [],
+        'imm': [],
     }
     for file in combine_files[:]:
         with open(file, 'rb') as f:
@@ -220,8 +224,10 @@ if __name__ == '__main__':
             all_files['mv'] += data['mv']
             all_files['imm'] += data['imm']
     
-    min_len = min(len(all_files['mv']), len(all_files['imm']))
-    # data_len = min(len(all_files[0]), len(all_files[1]), len(all_files[2]))
+    # min_len = min(len(all_files['mv']), len(all_files['imm']))
+    data_len = min(len(all_files['mv']), len(all_files['imm']), len(all_files[0]), len(all_files[1]), len(all_files[2]))
+
+    print(data_len)
     for key in all_files.keys():
         print(key, len(all_files[key]))
 
@@ -231,7 +237,7 @@ if __name__ == '__main__':
     for key in all_files.keys():
         with open(f'{balance_folder}/train_{key}.pkl', 'wb') as f:
             if key == 'mv' or key == 'imm':
-                pickle.dump(all_files[key][:min_len], f)
+                pickle.dump(all_files[key][:], f)
             else:
                 pickle.dump(all_files[key][:], f)
 

@@ -4,21 +4,110 @@ class RunCfg(PrefixProto):
 
     class runs:
         device = 'cuda:0'
-        train_mode = False
+        train_mode = 'train' # 'sim_test', 'real_test'
         model_name = 'transformer'
-        save_root = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results'
+        save_root = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor'
+        log_folder = 'results'
+        experiments_folder = 'experiments_on_contact'
+        real_experiments_folder = 'real_experiments'
         class train:
-            data_source = ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_0/balanced/train_0.pkl', '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_0/balanced/train_1.pkl', '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_0/balanced/train_2.pkl']
+            # data_source = [
+            #     '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19/movable_1_obs/balanced/train_0.pkl', 
+            #     '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19/movable_1_obs/balanced/train_1.pkl', 
+            #     '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19/static_1_obs/balanced/train_0.pkl', 
+            #     '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19/static_1_obs/balanced/train_1.pkl'
+            # ]
 
-            inputs = ['joint_pos', 'joint_vel', 'torques']
-            outputs = ['pose']
+            data_source = [
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_0.pkl', 
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_mv.pkl', 
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_imm.pkl', 
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_2.pkl'
+            ]
+
+            inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
+            outputs = ['contact', 'movable', 'pose', 'size']
+
+            save_directory = '2_obs/full_prediction'
         
         class test:
-            data_source = [['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_0/balanced/train_1.pkl']]
-            inputs = [['joint_pos', 'joint_vel', 'torques']]
-            outputs = [['pose']]
-            ckpt = ['/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer/2024-02-19_13-28-55/checkpoints/transformer_weights_4.pt']
+            # data_source = [
+            #     ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/static_1_obs/balanced/train_imm.pkl'], 
+            #     ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/movable_1_obs/balanced/train_mv.pkl']
+            #     ]
+            
+            data_source = [
+                ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_imm.pkl'], 
+                ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_mv.pkl'], 
+                ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_2.pkl']]
+
+            log_folder = 'losses'
+            
+            # inputs = [['joint_pos', 'joint_vel', 'torques'], ['joint_pos', 'joint_vel', 'torques'], ['joint_pos', 'joint_vel', 'torques']]
+            # outputs = [['pose', 'size'], ['pose', 'size'], ['pose', 'size']]
+            # ckpt = [
+            #     'ps_from_qqdottau/2024-02-20_07-54-16/checkpoints/transformer_weights_9.pt',
+            #     'ps_from_qqdottau/2024-02-20_07-54-16/checkpoints/transformer_weights_9.pt',
+            #     'ps_from_qqdottau/2024-02-20_07-54-16/checkpoints/transformer_weights_9.pt'
+            #     ]
+            # experiment_name = ['ps_from_qqdottau_static', 'ps_from_qqdottau_movable', 'ps_from_qqdottau_both']
+
+            # inputs = [['joint_pos', 'joint_vel', 'torques', 'pose'], ['joint_pos', 'joint_vel', 'torques', 'pose'], ['joint_pos', 'joint_vel', 'torques', 'pose']]
+            # outputs = [['pose', 'size'], ['pose', 'size'], ['pose', 'size']]
+            # ckpt = [
+            #     'ps_from_qqdottaupose/2024-02-20_07-53-42/checkpoints/transformer_weights_9.pt',
+            #     'ps_from_qqdottaupose/2024-02-20_07-53-42/checkpoints/transformer_weights_9.pt',
+            #     'ps_from_qqdottaupose/2024-02-20_07-53-42/checkpoints/transformer_weights_9.pt'
+            #     ]
+            # experiment_name = ['ps_from_qqdottaupose_static', 'ps_from_qqdottaupose_movable', 'ps_from_qqdottaupose_both']
+
         
+            # inputs = [['joint_pos', 'joint_vel', 'torques', 'pose'], ['joint_pos', 'joint_vel', 'torques', 'pose'], ['joint_pos', 'joint_vel', 'torques', 'pose']]
+            # outputs = [['pose'], ['pose'], ['pose']]
+            # ckpt = [
+            #     'p_from_qqdottaupose/2024-02-20_07-55-23/checkpoints/transformer_weights_9.pt',
+            #     'p_from_qqdottaupose/2024-02-20_07-55-23/checkpoints/transformer_weights_9.pt',
+            #     'p_from_qqdottaupose/2024-02-20_07-55-23/checkpoints/transformer_weights_9.pt'
+            #     ]
+            # experiment_name = ['p_from_qqdottaupose_static', 'p_from_qqdottaupose_movable', 'p_from_qqdottaupose_both']
+
+            # inputs = [['joint_pos', 'joint_vel', 'torques'], ['joint_pos', 'joint_vel', 'torques'], ['joint_pos', 'joint_vel', 'torques']]
+            # outputs = [['pose'], ['pose'], ['pose']]
+            # ckpt = [
+            #     'p_from_qqdottau/2024-02-20_07-55-06/checkpoints/transformer_weights_9.pt',
+            #     'p_from_qqdottau/2024-02-20_07-55-06/checkpoints/transformer_weights_9.pt',
+            #     'p_from_qqdottau/2024-02-20_07-55-06/checkpoints/transformer_weights_9.pt'
+            #     ]
+            # experiment_name = ['p_from_qqdottau_static', 
+            # 'p_from_qqdottau_movable', 'p_from_qqdottau_both']
+
+            # inputs = [['joint_pos', 'joint_vel'], ['joint_pos', 'joint_vel'], ['joint_pos', 'joint_vel']]
+            # outputs = [['pose'], ['pose'], ['pose']]
+            # ckpt = [
+            #     'p_from_qqdot/2024-02-20_07-56-15/checkpoints/transformer_weights_9.pt',
+            #     'p_from_qqdot/2024-02-20_07-56-15/checkpoints/transformer_weights_9.pt',
+            #     'p_from_qqdot/2024-02-20_07-56-15/checkpoints/transformer_weights_9.pt'
+            #     ]
+            # experiment_name = ['p_from_qqdot_static', 'p_from_qqdot_movable', 'p_from_qqdot_both']
+
+            inputs = [['joint_pos'], ['joint_pos'], ['joint_pos']]
+            outputs = [['pose'], ['pose'], ['pose']]
+            ckpt = [
+                'p_from_q/2024-02-20_07-56-29/checkpoints/transformer_weights_9.pt',
+                'p_from_q/2024-02-20_07-56-29/checkpoints/transformer_weights_9.pt',
+                'p_from_q/2024-02-20_07-56-29/checkpoints/transformer_weights_9.pt'
+                ]
+            experiment_name = ['p_from_q_static', 'p_from_q_movable', 'p_from_q_both']
+
+            # inputs = [['pose'], ['pose'], ['pose']]
+            # outputs = [['pose'], ['pose'], ['pose']]
+            # ckpt = [
+            #     'p_from_pose/2024-02-20_11-13-20/checkpoints/transformer_weights_9.pt',
+            #     'p_from_pose/2024-02-20_11-13-20/checkpoints/transformer_weights_9.pt',
+            #     'p_from_pose/2024-02-20_11-13-20/checkpoints/transformer_weights_9.pt'
+            #     ]
+            # experiment_name = ['p_from_pose_static', 'p_from_pose_movable', 'p_from_pose_both']
+
     class transformer:
         class model_params:
             sequence_length = 1500

@@ -8,6 +8,51 @@ from matplotlib import animation
 # from indep_model.config import *
 FFwriter = animation.FFMpegWriter
 RECTS = 2
+
+
+def get_real_visualization(robot_params, 
+                           obstacle_count,
+                           gt_obstacle_params,
+                           pred_obstacle_params):
+
+    fig, ax = plt.subplots(1, 1, figsize=(19.2, 10.8), dpi=100)
+    # ax should have xlim, ylim, grid at 0.2 step for x and y
+    ax.set(xlim=(-1.0, 4.0), ylim=(-1, 1))
+    ax.axis('off')
+
+    patches = []
+    
+    # robot patch
+    rpos = np.array([robot_params[0], robot_params[1]])
+    rrot = np.array(robot_params[2]) * 180/np.pi
+    rsize = np.array([0.52, 0.30])
+
+    patches.append(pch.Rectangle(rpos - rsize/2, *(rsize), angle=rrot, rotation_point='center', facecolor='green'))
+
+    # grount truth obstacle patch
+    k = 0
+    for i in range(obstacle_count):
+        obs_pos = np.array(gt_obstacle_params[k:k+2])
+        obs_rot = np.array(gt_obstacle_params[k+2])  * 180/np.pi
+        # obs_size = np.array(gt_obstacle_params[k+3:k+5])
+        obs_size = np.array([0.43, 1.62]) if i == 0 else np.array([0.43, 0.62])
+    
+        patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor='black'))
+
+        k += 5
+    
+    k = 2
+    for i in range(obstacle_count):
+        obs_pos = np.array(pred_obstacle_params[k:k+2])
+        obs_rot = np.array(pred_obstacle_params[k+2])  * 180/np.pi
+        obs_size = np.array(pred_obstacle_params[k+3:k+5])
+    
+        patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor='red'))
+        k += 7
+    
+    return patches
+
+
 def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=False):
 
     obs = obs.cpu()

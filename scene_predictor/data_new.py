@@ -12,15 +12,15 @@ class TransformerDataset(Dataset):
         self.input_dict = cfg.inputs
         self.output_dict = cfg.outputs
 
-        self.all_folders = files
+        self.files = files
         self.sequence_length = int(sequence_length)
         self.estimate_pose = estimate_pose
     
     def __len__(self):
-        return int((len(self.all_folders)))
+        return int((len(self.files)))
     
     def __getitem__(self, idx):
-        data = np.load(self.all_folders[idx])
+        data = np.load(self.files[idx])
         
         # data keys: input, target, target_env, actions, ll_actions, fsw, done 
 
@@ -93,13 +93,71 @@ class TransformerDataset(Dataset):
 
         # print(fsw.shape)
         return inputs, final_target, mask, final_fsw, pose, target
+
+class RealTransformerDataset(Dataset):
+    def __init__(self, cfg, files, sequence_length):
+        self.all_files = files
+        self.sequence_length = sequence_length
+        self.output_size = sum(cfg.outputs.values())
+        self.obstacles = cfg.obstacles
+        self.input_dict = cfg.inputs
+        self.output_dict = cfg.outputs
+
+    def __len__(self):
+        return int((len(self.all_files)))
+
+    def __getitem__(self, idx):
+        data = np.load(self.all_files[idx], allow_pickle=True)
+
+        done_idx = data['done'].nonzero()[0][-1]
+        start = 0
+        end = done_idx
+        inp = torch.from_numpy(data['input'][start:end])
+        torques_est = torch.from_numpy(data['torques_estimated'][start:end])
+        inp[:, 27:39] = torques_est
+
+        # projected_gravity = inp[:, :3] * 0.1
+        joint_pos = inp[:, 3:15] * 1
+        joint_vel = inp[:, 15:27] * 0.05
+        torques = inp[:, 27:39] * 0.08
+        pose = (torch.from_numpy(data['target'][start:end]) * torch.tensor([0.25, 1, 1/3.14]))
+
+        inputs = {
+            # 'projected_gravity': projected_gravity,
+            'joint_pos': joint_pos,
+            'joint_vel': joint_vel,
+            'torques': torques,
+            'pose': pose
+        }
+
+        inputs = [inputs[k] for k in self.input_dict.keys()]
+        inputs = torch.cat(inputs, dim=-1)
+        
+        inputs = torch.cat([inputs, torch.zeros(1500 - (end-start), inputs.shape[1])], dim=0) # padding
+    
+        m_obstacle_data = data['obstacles'][0]
+        im_obstacle_data = data['obstacles'][2]
+        
+        target = torch.from_numpy(np.concatenate([m_obstacle_data, im_obstacle_data], axis=1))
+
+        mask = torch.zeros((1500, 1), dtype=torch.bool)
+        mask[:end, :] = True
+        
+        return inputs, target, mask, pose
     
 if __name__ == '__main__':
 
     import pickle
-    with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:
-        files = pickle.load(f)
-    files = files[:10]
-    dataset = TransformerDataset(files, 1500)
+    from runner_config import RunCfg
+
+    cfg = RunCfg.transformer.data_params
+
+    data_files = [sorted(glob(f'/common/home/dm1487/Downloads/sep15/2/*.npz'))[-1]]
+
+    # with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:
+    #     files = pickle.load(f)
+
+    files = data_files
+    dataset = RealTransformerDataset(cfg, files, 1500)
     dataset[0]
     

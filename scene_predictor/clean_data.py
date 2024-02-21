@@ -69,7 +69,11 @@ if __name__ == '__main__':
     # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1')
 
     # files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/aug27/2_obs/1/*/*.npz')
-    files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/all_data/*/*.npz')
+    root_path = '/common/users/dm1487/legged_manipulation_data_store'
+    root_traj_path = f'{root_path}/trajectories'
+    sub_path = 'iros24_play_feb21/2_obs'
+
+    files = glob(f'{root_traj_path}/{sub_path}/*/*/*.npz')
     # with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:
     #     files = pickle.load(f)
     print(len(files))

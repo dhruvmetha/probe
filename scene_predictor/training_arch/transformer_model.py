@@ -1,9 +1,9 @@
-from data_new import TransformerDataset
+from data_new import TransformerDataset, RealTransformerDataset
 from model import MiniTransformer
 from runner_config import RunCfg
 from torch.utils.data import DataLoader
 from params_proto import PrefixProto
-from visualization import get_visualization
+from visualization import get_visualization, get_real_visualization
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 import glob
@@ -17,44 +17,8 @@ import pickle
 import os
 import sys
 
-class TransformerArgs(PrefixProto):
-    
-    alg = 'transformer'
-    estimate_pose = False
-
-    # model parameters
-    sequence_length = 1500
-    hidden_state_size = 1024
-    embed_size = 512
-    num_heads = 2
-    num_layers = 2
-    input_size = 42
-    output_size = 7
-    boxes = 2
-    learning_rate = 1e-4
-    epochs = 50
-    train_batch_size = 64
-    val_batch_size = 64
-    test_batch_size = 1
-    train_test_split = 0.95
-
-    # loss scales
-    contact_scale = 1/3
-    movable_scale = 1/2
-    pos_scale = 2
-    yaw_scale = 2 * 10
-    size_scale = 2
-
-    # logging
-    eval_every = 200
-    save_every = 500
-    print_every = 50
-    test_every = eval_every
-    animation = True
-    
-
 class TransformerModel:
-    def __init__(self, cfg: RunCfg.transformer, data_source, save_folder, device='cuda:0'):
+    def __init__(self, cfg: RunCfg.transformer, data_source, save_folder, directory, device='cuda:0'):
 
         self.cfg = cfg
 
@@ -91,7 +55,7 @@ class TransformerModel:
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=5, verbose=True)
 
             # define save location
-            self.save_path = f'{save_folder}/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
+            self.save_path = f'{save_folder}/{directory}/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path)
             
@@ -159,16 +123,21 @@ class TransformerModel:
                 contact_loss1 = self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
                 k += 1
                 loss_list.append(torch.sum(contact_loss1 * mask)/torch.sum(mask))
+
             if 'movable' in self.output_args:
                 movable_loss1 = self.movable_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
                 k += 1
                 loss_list.append(torch.sum(movable_loss1 * mask)/torch.sum(mask))
 
             if 'pose' in self.output_args:
-                pos_loss1 = self.pos_loss(out[:, :, k:k+3], targ[:, :, k:k+3])
-                k += 3
+                pos_loss1 = self.pos_loss(out[:, :, k:k+2], targ[:, :, k:k+2])
+                k += 2
                 loss_list.append(torch.sum(pos_loss1 * mask)/torch.sum(mask))
-            
+
+                yaw_loss1 = self.yaw_loss(out[:, :, k:k+1], targ[:, :, k:k+1])
+                k += 1
+                loss_list.append(torch.sum(yaw_loss1 * mask)/torch.sum(mask))
+
             if 'size' in self.output_args:
                 size_loss1 = self.size_loss(out[:, :, k:k+2], targ[:, :, k:k+2])
                 k += 2
@@ -303,7 +272,7 @@ class TransformerModel:
 
         self.model.eval()
         with torch.no_grad():
-            progress_bar = tqdm(total=51)
+            progress_bar = tqdm(total=len(test_dataset))
             for i, (inp, targ, mask, fsw, pose, gt_target) in enumerate(test_loader):
                 inp, targ, mask = inp.to(self.device), targ.to(self.device), mask.to(self.device)
                 
@@ -316,9 +285,16 @@ class TransformerModel:
                         sub_key = 'movable'
                     else:
                         sub_key = 'static'
+
                     # first_contact = 0
-                    first_contact = gt_target[0, :, k+0:k+1].nonzero()[0][0]
-                    # print(first_contact, done_idx)
+                    check_first_contact = gt_target[0, :, gt_k+0:gt_k+1].nonzero()
+                    if len(check_first_contact) > 0:
+                        first_contact = check_first_contact.nonzero()[0][0]
+                    else:
+                        gt_k += 9
+                        k += self.output_size
+                        continue
+                    
                     if 'contact' in self.output_args:
                         # record_seq_loss.append(self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]))
                         # record_final_loss.append(self.contact_loss(out[:, done_idx, k+0:k+1], targ[:, done_idx, k+0:k+1]))
@@ -331,6 +307,8 @@ class TransformerModel:
                         k += 1
                     
                     if 'pose' in self.output_args:
+                        out[:, :, k:k+3] = out[:, :, k:k+3] * self.targ_scale[2:5]
+                        targ[:, :, k:k+3] = targ[:, :, k:k+3] * self.targ_scale[2:5]
                         pos_loss = F.mse_loss(out[:, :, k:k+3], targ[:, :, k:k+3], reduction='none')
 
                         # print(torch.sum(pos_loss[0, first_contact:done_idx, :], dim=0), (pos_loss[0, first_contact:done_idx, :]).shape, (done_idx-first_contact), pos_loss[0, done_idx, :].cpu().numpy())
@@ -345,6 +323,8 @@ class TransformerModel:
                         k += 3
                     
                     if 'size' in self.output_args:
+                        out[:, :, k:k+2] = out[:, :, k:k+2] * self.targ_scale[5:7]
+                        targ[:, :, k:k+2] = targ[:, :, k:k+2] * self.targ_scale[5:7]
                         size_loss = F.mse_loss(out[:, :, k:k+2], targ[:, :, k:k+2], reduction='none')
                         record_seq_loss['size'][sub_key].append((torch.sum(size_loss[0, first_contact:done_idx, :], dim=0)/(done_idx-first_contact)).cpu().numpy())
                         record_final_loss['size'][sub_key].append(size_loss[0, done_idx-1, :].cpu().numpy())
@@ -354,8 +334,8 @@ class TransformerModel:
 
                 progress_bar.update(1)
 
-                if i == 15:
-                    break
+                # if (i+1) == 50:
+                #     break
         
         # get means
         for key in list(record_seq_loss.keys()):
@@ -368,6 +348,45 @@ class TransformerModel:
                     del record_final_loss[key][sub_key]
 
         return { 'seq_loss': record_seq_loss, 'final_loss': record_final_loss }
+    
+    def test_real(self, data_source):
+        datafiles = []
+        if type(data_source) == list:
+            for i in range(len(data_source)):
+                with open(data_source[i], 'rb') as file:
+                    datafiles += pickle.load(file)
+        else:
+            with open(data_source, 'rb') as file:
+                datafiles += pickle.load(file)
+
+        # initialize the datasets
+        real_dataset = RealTransformerDataset(self.data_params, datafiles, sequence_length=self.model_params.sequence_length)
+        dataloader = DataLoader(real_dataset, batch_size=1, shuffle=False)
+
+        self.model.eval()
+        with torch.no_grad():
+            for i, (inp, targ, mask, pose) in enumerate(dataloader):
+                inp, targ, mask = inp.to(self.device), targ.to(self.device), mask.to(self.device)
+                out = self.model(inp, src_mask = self.src_mask)
+
+                if self.logging.animation:
+                    pose *= self.pose_scale
+                    self.save_real_animation(pose, targ, out, mask)
+                    break
+                    
+    def save_real_animation(self, pose, targ, out, mask):
+        # save animations
+        patches = []
+        for step in range(pose.shape[1]):
+            if mask[0, step, 0]:
+                patch_set = get_real_visualization(pose[0, step, :], targ[0, step, :], out[0, step, :])
+                patches.append(patch_set)
+            else:
+                break
+        
+        with open(f'{self.viz_path}/real_plot_{self.total_animations}.pkl', 'wb') as f:
+                pickle.dump(patches, f)
+        self.total_animations += 1
 
     def save_animation(self, pose, targ, mask, fsw, out):
         # save animations

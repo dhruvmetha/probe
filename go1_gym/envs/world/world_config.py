@@ -195,19 +195,19 @@ TASK_ONE = [
             'density': [10000][::-1]
         },
 
-        # {
-        #     'name': ['fixed_block_4'][::-1],
-        #     'size': [[lambda : round(np.random.uniform(*[0.4, 0.4]), 2), lambda: round(np.random.uniform(*[0.3, 1.0]), 2), lambda: 0.4]][::-1], 
-        #     'pos': [[round(np.random.uniform(*world_cfg.fixed_block.pos_x_range), 2), round(np.random.uniform(*world_cfg.fixed_block.pos_y_range), 2), 0.2]][::-1],
-        #     'density': [10000][::-1]
-        # },
+        {
+            'name': ['fixed_block_4'][::-1],
+            'size': [[lambda : round(np.random.uniform(*[0.4, 0.4]), 2), lambda: round(np.random.uniform(*[0.3, 1.0]), 2), lambda: 0.4]][::-1], 
+            'pos': [[round(np.random.uniform(*world_cfg.fixed_block.pos_x_range), 2), round(np.random.uniform(*world_cfg.fixed_block.pos_y_range), 2), 0.2]][::-1],
+            'density': [10000][::-1]
+        },
 
-        # {
-        #     'name': ['fixed_block_5'][::-1],
-        #     'size': [[lambda : round(np.random.uniform(*[0.4, 0.4]), 2), lambda: round(np.random.uniform(*[0.3, 1.0]), 2), lambda: 0.4]][::-1], 
-        #     'pos': [[round(np.random.uniform(*world_cfg.fixed_block.pos_x_range), 2), round(np.random.uniform(*world_cfg.fixed_block.pos_y_range), 2), 0.2]][::-1],
-        #     'density': [10000][::-1]
-        # },
+        {
+            'name': ['fixed_block_5'][::-1],
+            'size': [[lambda : round(np.random.uniform(*[0.4, 0.4]), 2), lambda: round(np.random.uniform(*[0.3, 1.0]), 2), lambda: 0.4]][::-1], 
+            'pos': [[round(np.random.uniform(*world_cfg.fixed_block.pos_x_range), 2), round(np.random.uniform(*world_cfg.fixed_block.pos_y_range), 2), 0.2]][::-1],
+            'density': [10000][::-1]
+        },
 
         {
             'name': ['movable_block_3'][::-1],
@@ -446,8 +446,8 @@ TASK_6 = [
 # -0.58 + 0.72 + 0.35 =  
 # INPLAY_ASSETS = [*TASK_ONE]
 # EVAL_INPLAY_ASSETS = [*TASK_ONE]
-INPLAY_ASSETS = [*TASK_ONE, *TASK_TWO]
-EVAL_INPLAY_ASSETS = [*TASK_ONE, *TASK_TWO]
+INPLAY_ASSETS = [*TASK_TWO]
+EVAL_INPLAY_ASSETS = [*TASK_TWO]
 # INPLAY_ASSETS = [*TASK_ONE, *TASK_TWO, *TASK_THREE]
 # EVAL_INPLAY_ASSETS = [*TASK_ONE, *TASK_TWO, *TASK_THREE]
 

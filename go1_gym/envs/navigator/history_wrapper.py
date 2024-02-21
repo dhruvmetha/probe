@@ -182,6 +182,15 @@ class NavigationHistoryWrapper(gym.Wrapper):
         super().reset()
         # ret, _, _, _ = self.step(torch.zeros_like(self.env.actions))
         self.obs_history[:, :] = 0
+        self.env_step[:] = 0
+        self.input_data[:, :, :] = 0.0
+        self.ll_actions_data[:, :, :] = 0.0
+        self.actions_data[:, :, :] = 0.0
+        self.target_data[:, :, :] = 0.0
+        self.target_env_data[:, :, :] = 0.0
+        self.fsw_data[:, :, :] = 0.0
+        self.done_data[:, :] = False
+        
         # ret = self.env.get_observations()
         privileged_obs = self.env.get_privileged_observations()
         return { "privileged_obs": privileged_obs, "obs_history": self.obs_history}

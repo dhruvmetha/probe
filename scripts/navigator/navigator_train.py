@@ -15,7 +15,7 @@ if __name__ == "__main__":
     logger.configure(logger.utcnow(f'high_level_policy/%Y-%m-%d/{stem}/%H%M%S.%f'),
                      root=Path(f"{MINI_GYM_ROOT_DIR}/runs").resolve(), )
 
-    SEED = 45
+    SEED = 100
     np.random.seed(SEED)
     torch.manual_seed(SEED)
     random.seed(SEED)

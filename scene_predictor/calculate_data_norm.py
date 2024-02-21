@@ -1,4 +1,4 @@
-from matplotlib import pyplot as plt
+cfrom matplotlib import pyplot as plt
 import pickle
 import random
 import numpy as np
