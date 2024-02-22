@@ -3,7 +3,7 @@ import torch
 import math
 
 class MiniTransformer(nn.Module):
-    def __init__(self, input_size, output_size, embed_size=512, hidden_size=2048, num_heads=8, max_sequence_length=250, num_layers=6, estimate_pose=True, layer_norm=True):
+    def __init__(self, input_size, output_size, num_obstacles, embed_size=512, hidden_size=2048, num_heads=8, max_sequence_length=250, num_layers=6, estimate_pose=True, layer_norm=True):
         super(MiniTransformer, self).__init__()
 
         self.batch_first = True
@@ -27,7 +27,7 @@ class MiniTransformer(nn.Module):
         
         self.dropout = nn.Dropout(0.2)
 
-        self.out = nn.ModuleList([nn.Sequential(nn.Linear(embed_size, 64), nn.ELU(), nn.Dropout(0.2), nn.Linear(64, 7)) for _ in range(2)])
+        self.out = nn.ModuleList([nn.Sequential(nn.Linear(embed_size, 64), nn.ELU(), nn.Dropout(0.2), nn.Linear(64, output_size)) for _ in range(num_obstacles)])
         self.estimate_pose = estimate_pose
     
     def forward(self, x, src_mask=None):

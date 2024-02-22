@@ -55,20 +55,32 @@ class TransformerDataset(Dataset):
         final_fsw = torch.zeros((self.sequence_length, int(self.obstacles * self.output_size)))
         
         k = 0
+        fsw_k = 0 
         for obs_idx in range(self.obstacles):
             true_k = (9 * obs_idx) # skip the last 2 elements (data contains: mass and friction that we do not consider in the model)
+            if 'confidence' in self.output_dict:
+                contact_points = target[:, true_k + 0].nonzero()
+                if len(contact_points) > 0:
+                    contact_idx = contact_points[-1][0]
+                    final_target[contact_idx:, k] = 1.
+                    final_fsw[contact_idx:, k] = 1.
+                k += self.output_dict['confidence']
+                
             if 'contact' in self.output_dict:
                 final_target[:, k] = target[:, true_k + 0]
                 final_fsw[:, k] = fsw[:, true_k + 0]
                 k += self.output_dict['contact']
+
             if 'movable' in self.output_dict:
                 final_target[:, k] = target[:, true_k + 1]
                 final_fsw[:, k] = fsw[:, true_k + 1]
                 k += self.output_dict['movable']
+
             if 'pose' in self.output_dict:
                 final_target[:, k:k+self.output_dict['pose']] = target[:, true_k + 2: true_k + 5] * torch.tensor([0.25, 1, 1/3.14])
                 final_fsw[:, k:k+self.output_dict['pose']] = fsw[:, true_k + 2: true_k + 5]
                 k += self.output_dict['pose']
+
             if 'size' in self.output_dict:
                 final_target[:, k:k+self.output_dict['size']] = target[:, true_k + 5: true_k + 7] * torch.tensor([1, 1/1.7])
                 final_fsw[:, k:k+self.output_dict['size']] = fsw[:, true_k + 5: true_k + 7]

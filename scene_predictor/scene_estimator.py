@@ -113,11 +113,6 @@ class SceneEstimator:
 
         loss_object_2 = (self.contact_scale * (F.binary_cross_entropy(torch.sigmoid(out[:, :, k:k+1]), targ[:, :, k:k+1], reduction='none'))  + self.movable_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k+1:k+2]), targ[:, :, k+1:k+2], reduction='none') + (self.pose_scale * torch.sum(F.mse_loss(out[:, :, k+2:k+4], targ[:, :, k+2:k+4], reduction='none'), dim=-1).unsqueeze(-1)) + (self.yaw_scale * torch.sum(F.mse_loss(out[:, :, k+4:k+5], targ[:, :, k+4:k+5]), dim=-1).unsqueeze(-1)) + (self.size_scale * torch.sum(F.mse_loss(out[:, :, k+5:k+7], targ[:, :, k+5:k+7], reduction='none'), dim=-1).unsqueeze(-1))) * targ[:, :, k-1:k] + self.confidence_scale * (F.binary_cross_entropy(torch.sigmoid(out[:, :, k-1:k]), targ[:, :, k-1:k]))
 
-
-        # phys_loss = F.relu(targ[:, :, 0:1] * targ[:, :, 8:9] *  (0.1 - torch.sqrt(((out[:, :, 3] - out[:, :, 11]) * 4) ** 2 + ((out[:, :, 4] - out[:, :, 12])) ** 2)).unsqueeze(-1))
-
-        # phys_loss = targ[:, :, 0:1] * targ[:, :, 8:9] *  ((0.1) - torch.norm(out[:, :, 3:5] - out[:, :, 11:13], dim=-1).unsqueeze(-1))
-
         k += 8 # 17
 
         loss_object_3 = (self.contact_scale * (F.binary_cross_entropy(torch.sigmoid(out[:, :, k:k+1]), targ[:, :, k:k+1], reduction='none'))  + self.movable_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k+1:k+2]), targ[:, :, k+1:k+2], reduction='none') + (self.pose_scale * torch.sum(F.mse_loss(out[:, :, k+2:k+4], targ[:, :, k+2:k+4], reduction='none'), dim=-1).unsqueeze(-1)) + (self.yaw_scale * torch.sum(F.mse_loss(out[:, :, k+4:k+5], targ[:, :, k+4:k+5]), dim=-1).unsqueeze(-1)) + (self.size_scale * torch.sum(F.mse_loss(out[:, :, k+5:k+7], targ[:, :, k+5:k+7], reduction='none'), dim=-1).unsqueeze(-1))) * targ[:, :, k-1:k] + self.confidence_scale * (F.binary_cross_entropy(torch.sigmoid(out[:, :, k-1:k]), targ[:, :, k-1:k]))

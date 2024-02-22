@@ -10,15 +10,15 @@ FFwriter = animation.FFMpegWriter
 RECTS = 2
 
 
-def get_real_visualization(robot_params, 
-                           obstacle_count,
+def get_real_visualization(obstacle_count,
+                           robot_params,
                            gt_obstacle_params,
                            pred_obstacle_params):
 
-    fig, ax = plt.subplots(1, 1, figsize=(19.2, 10.8), dpi=100)
-    # ax should have xlim, ylim, grid at 0.2 step for x and y
-    ax.set(xlim=(-1.0, 4.0), ylim=(-1, 1))
-    ax.axis('off')
+    # fig, ax = plt.subplots(1, 1, figsize=(19.2, 10.8), dpi=100)
+    # # ax should have xlim, ylim, grid at 0.2 step for x and y
+    # ax.set(xlim=(-1.0, 4.0), ylim=(-1, 1))
+    # ax.axis('off')
 
     patches = []
     
@@ -36,18 +36,25 @@ def get_real_visualization(robot_params,
         obs_rot = np.array(gt_obstacle_params[k+2])  * 180/np.pi
         # obs_size = np.array(gt_obstacle_params[k+3:k+5])
         obs_size = np.array([0.43, 1.62]) if i == 0 else np.array([0.43, 0.62])
-    
-        patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor='black'))
+        if i == 0:
+            facecolor = 'yellow'
+        else:
+            facecolor = 'red'
+        patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor=facecolor))
 
         k += 5
     
     k = 2
     for i in range(obstacle_count):
+        contact = torch.sigmoid(pred_obstacle_params[k-2])
+        movable = torch.sigmoid(pred_obstacle_params[k-1])
         obs_pos = np.array(pred_obstacle_params[k:k+2])
         obs_rot = np.array(pred_obstacle_params[k+2])  * 180/np.pi
         obs_size = np.array(pred_obstacle_params[k+3:k+5])
-    
-        patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor='red'))
+        facecolor = 'blue'
+        if torch.sigmoid(movable) > 0.5:
+            facecolor = 'orange'
+        patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor=facecolor))
         k += 7
     
     return patches
@@ -76,10 +83,10 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
     # print(estimate_pose)
     if not estimate_pose:
         for i in range(RECTS):
-            fsw_j = i*7 + 2
-            j = i*7 + 2
+            fsw_j = i*7 + 3
+            j = i*7 + 3
             
-            # confidence = torch.sigmoid(pred[idx][j-3]).item()
+            confidence = torch.sigmoid(pred[idx][j-3]).item()
             contact = torch.sigmoid(pred[idx][j-2])
             # alpha = 0.3 if contact.item() < 0.5 else 0.8
             movable = torch.sigmoid(pred[idx][j-1])
@@ -108,10 +115,8 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
             for _ in range(2):
                 patch_set.append(pch.Rectangle(pos - size/2, *(size), angle=angle, rotation_point='center', facecolor=block_color, label=f'true_mov_{i}'))
 
-                if np.prod(size_pred) > 0.05:
-                    
+                if np.prod(size_pred) > 0.05 or confidence > 0.5:
                     patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *(size_pred), angle=angle_pred, rotation_point='center', facecolor=pred_block_color,  label=f'pred_mov_{i}'))
-
                 else:
                     patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *([0., 0.]), angle=angle_pred, rotation_point='center', facecolor=pred_block_color,  label=f'pred_mov_{i}'))
                 

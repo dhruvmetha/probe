@@ -80,3 +80,4 @@ scene_predictor/balanced_data_*.pkl
 scene_predictor/results*
 scene_predictor/decoupled_inference
 scene_predictor/experiment_results
+real_robot_data/

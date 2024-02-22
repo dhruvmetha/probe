@@ -225,7 +225,7 @@ if __name__ == '__main__':
             all_files['imm'] += data['imm']
     
     # min_len = min(len(all_files['mv']), len(all_files['imm']))
-    data_len = min(len(all_files['mv']), len(all_files['imm']), len(all_files[0]), len(all_files[1]), len(all_files[2]))
+    data_len = min(len(all_files[0]), len(all_files[1]), len(all_files[2]))
 
     print(data_len)
     for key in all_files.keys():
@@ -239,7 +239,7 @@ if __name__ == '__main__':
             if key == 'mv' or key == 'imm':
                 pickle.dump(all_files[key][:], f)
             else:
-                pickle.dump(all_files[key][:], f)
+                pickle.dump(all_files[key][:data_len], f)
 
     shutil.rmtree(tmp_folder)
 

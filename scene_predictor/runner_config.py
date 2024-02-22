@@ -4,7 +4,7 @@ class RunCfg(PrefixProto):
 
     class runs:
         device = 'cuda:0'
-        train_mode = 'train' # 'sim_test', 'real_test'
+        mode = 'train' # 'train', 'sim_test', 'real_test'
         model_name = 'transformer'
         save_root = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor'
         log_folder = 'results'
@@ -26,7 +26,7 @@ class RunCfg(PrefixProto):
             ]
 
             inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
-            outputs = ['contact', 'movable', 'pose', 'size']
+            outputs = ['confidence', 'contact', 'movable', 'pose', 'size']
 
             save_directory = '2_obs/full_prediction'
         
@@ -108,6 +108,19 @@ class RunCfg(PrefixProto):
             #     ]
             # experiment_name = ['p_from_pose_static', 'p_from_pose_movable', 'p_from_pose_both']
 
+
+        class real_test:
+            root_folder = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/real_robot_data'
+            sub_folders = ['sep14', 'sep15']
+
+            inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
+            outputs = ['contact', 'movable', 'pose', 'size']
+
+            log_folder = '2_obs/full_prediction/2024-02-21_22-37-22'
+            save_directory = ''
+            ckpt = '2_obs/full_prediction/2024-02-21_22-37-22/checkpoints/transformer_weights_1.pt'
+            experiment_name = 'full_prediction_real'
+
     class transformer:
         class model_params:
             sequence_length = 1500
@@ -126,6 +139,7 @@ class RunCfg(PrefixProto):
                     'pose': 3
                     }
             outputs = {
+                    'confidence': 1,
                     'contact': 1, 
                     'movable': 1, 
                     'pose': 3, 
@@ -142,6 +156,7 @@ class RunCfg(PrefixProto):
             train_test_split = 0.95
 
         class loss_scales:
+            confidence_scale = 1
             contact_scale = 1/3
             movable_scale = 1/2
             pos_scale = 2

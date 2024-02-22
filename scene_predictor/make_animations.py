@@ -12,7 +12,8 @@ FFwriter = animation.FFMpegWriter
 estimate_pose = False
 # RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/results_{"results_1_obs_pe" if estimate_pose else "priv_info"}/*/*'), key=os.path.getmtime)[-1]
 
-RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/results/transformer/full_from_qqdottau/*'))[-1]
+# RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/results/transformer/full_from_qqdottau/*'))[-1]
+RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/real_experiments/transformer'))
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results_1_obs_se/2023-08-24_09-28-10'
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45'
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_750_2048/2023-05-20_15-21-17'

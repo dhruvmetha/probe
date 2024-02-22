@@ -6,6 +6,9 @@ from params_proto import PrefixProto
 from visualization import get_visualization, get_real_visualization
 from tqdm import tqdm
 from matplotlib import pyplot as plt
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import matplotlib.patches as pch
 import glob
 from datetime import datetime
 import torch
@@ -16,6 +19,8 @@ import numpy as np
 import pickle
 import os
 import sys
+
+FFwriter = animation.FFMpegWriter
 
 class TransformerModel:
     def __init__(self, cfg: RunCfg.transformer, data_source, save_folder, directory, device='cuda:0'):
@@ -33,12 +38,14 @@ class TransformerModel:
         self.output_args = cfg.data_params.outputs.keys()
         self.output_size = sum(cfg.data_params.outputs.values())
         self.num_obstacles = cfg.data_params.obstacles
+
         # set the device
         self.device = device
 
         # initialize the model
         self.model = MiniTransformer(input_size=self.input_size, 
-                                     output_size=self.output_size * self.num_obstacles, 
+                                     output_size=self.output_size,
+                                     num_obstacles=self.num_obstacles, 
                                      embed_size=self.model_params.embed_size, 
                                      hidden_size=self.model_params.hidden_state_size, 
                                      num_heads=self.model_params.num_heads, 
@@ -54,10 +61,10 @@ class TransformerModel:
             self.optimizer = optim.Adam(self.model.parameters(), lr=self.train_params.learning_rate)
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=5, verbose=True)
 
-            # define save location
             self.save_path = f'{save_folder}/{directory}/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path)
+            # define save location
             
             self.ckpt_path = f'{self.save_path}/checkpoints'
             if not os.path.exists(self.ckpt_path):
@@ -66,6 +73,8 @@ class TransformerModel:
             self.viz_path = f'{self.save_path}/viz'
             if not os.path.exists(self.viz_path):
                 os.makedirs(self.viz_path)
+
+        
         
 
         # src_mask
@@ -74,10 +83,12 @@ class TransformerModel:
         # init scales for animations
         self._init_scales()
         self.total_animations = 0
+        self.total_real_animations = 0
 
         
 
         # loss functions
+        self.confidence_criterion = nn.BCEWithLogitsLoss(reduction='none')
         self.contact_criterion = nn.BCEWithLogitsLoss(reduction='none')
         self.movable_criterion = nn.BCEWithLogitsLoss(reduction='none')
         
@@ -111,26 +122,34 @@ class TransformerModel:
     def _init_scales(self):
         self.pose_scale = torch.tensor([1/0.25, 1, 3.14], device=self.device)
         self.targ_scale = torch.tensor([1, 1, 1/0.25, 1, 3.14, 1, 1.7] * 2, device=self.device)
-        self.fsw_scale = torch.tensor([1, 1, 1, 1, 1, 1, 1] * 2)
+        self.fsw_scale = torch.tensor([1, 1, 1, 1, 1, 1, 1, 1] * 2)
 
     def loss_func(self, targ, out, mask):
-                
         k = 0
+        confidence_mask = torch.ones((targ.shape[0], targ.shape[1], 1), device=self.device, requires_grad=False)
+        targ_clone = targ.clone()
+        
         # object 1
         loss_list = []
         for obs_idx in range(self.num_obstacles):
+            if 'confidence' in self.output_args:
+                confidence_mask = (targ_clone[:, :, k+0:k+1]).float()
+                confidence_loss1 = self.confidence_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
+                k += 1
+                loss_list.append(torch.sum(confidence_loss1 * mask)/torch.sum(mask))
+
             if 'contact' in self.output_args:
                 contact_loss1 = self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
                 k += 1
                 loss_list.append(torch.sum(contact_loss1 * mask)/torch.sum(mask))
 
             if 'movable' in self.output_args:
-                movable_loss1 = self.movable_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
+                movable_loss1 = self.movable_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) *  confidence_mask
                 k += 1
                 loss_list.append(torch.sum(movable_loss1 * mask)/torch.sum(mask))
 
             if 'pose' in self.output_args:
-                pos_loss1 = self.pos_loss(out[:, :, k:k+2], targ[:, :, k:k+2])
+                pos_loss1 = self.pos_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask
                 k += 2
                 loss_list.append(torch.sum(pos_loss1 * mask)/torch.sum(mask))
 
@@ -139,7 +158,7 @@ class TransformerModel:
                 loss_list.append(torch.sum(yaw_loss1 * mask)/torch.sum(mask))
 
             if 'size' in self.output_args:
-                size_loss1 = self.size_loss(out[:, :, k:k+2], targ[:, :, k:k+2])
+                size_loss1 = self.size_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask
                 k += 2
                 loss_list.append(torch.sum(size_loss1 * mask)/torch.sum(mask))
 
@@ -349,15 +368,15 @@ class TransformerModel:
 
         return { 'seq_loss': record_seq_loss, 'final_loss': record_final_loss }
     
-    def test_real(self, data_source):
-        datafiles = []
-        if type(data_source) == list:
-            for i in range(len(data_source)):
-                with open(data_source[i], 'rb') as file:
-                    datafiles += pickle.load(file)
-        else:
-            with open(data_source, 'rb') as file:
-                datafiles += pickle.load(file)
+    def test_real(self, data_source, log_folder):
+        datafiles = data_source
+        # if type(data_source) == list:
+        #     for i in range(len(data_source)):
+        #         with open(data_source[i], 'rb') as file:
+        #             datafiles += pickle.load(file)
+        # else:
+        #     with open(data_source, 'rb') as file:
+        #         datafiles += pickle.load(file)
 
         # initialize the datasets
         real_dataset = RealTransformerDataset(self.data_params, datafiles, sequence_length=self.model_params.sequence_length)
@@ -369,24 +388,58 @@ class TransformerModel:
                 inp, targ, mask = inp.to(self.device), targ.to(self.device), mask.to(self.device)
                 out = self.model(inp, src_mask = self.src_mask)
 
+                print('saving animations')
                 if self.logging.animation:
+                    pose = pose.to(self.device)
                     pose *= self.pose_scale
-                    self.save_real_animation(pose, targ, out, mask)
-                    break
+                    out *= self.targ_scale
+                    self.save_real_animation(pose, targ, out, mask, log_folder)
                     
-    def save_real_animation(self, pose, targ, out, mask):
+        return None
+                    
+    def save_real_animation(self, pose, targ, out, mask, log_folder):
         # save animations
         patches = []
         for step in range(pose.shape[1]):
+            pose = pose.to('cpu')
+            targ = targ.to('cpu')
+            out = out.to('cpu')
+            mask = mask.to('cpu')
+            
             if mask[0, step, 0]:
-                patch_set = get_real_visualization(pose[0, step, :], targ[0, step, :], out[0, step, :])
+                
+                patch_set = get_real_visualization(self.num_obstacles, pose[0, step, :], targ[0, step, :], out[0, step, :])
                 patches.append(patch_set)
             else:
                 break
+
+        fig, ax = plt.subplots(1, 1, figsize=(19.2, 10.8), dpi=100)
+        ax.axis('off')
+        ax.set(xlim=(-1.0, 4.0), ylim=(-1, 1), aspect='auto')
+        last_patch = []
+
+        def animate(frame):
+            if len(last_patch) != 0:
+                for i in last_patch:
+                    try:
+                        i.remove()
+                    except:
+                        pass
+                last_patch.clear()
         
-        with open(f'{self.viz_path}/real_plot_{self.total_animations}.pkl', 'wb') as f:
-                pickle.dump(patches, f)
-        self.total_animations += 1
+            for patch in frame:
+                if patch is not None:
+                    ax.add_patch(patch)
+                    last_patch.append(patch)
+
+        # print(len(patches))
+        anim = animation.FuncAnimation(fig, animate, frames=patches, interval=10, repeat=False)
+        
+        anim.save(f"{log_folder}/plot_{self.total_real_animations}.mp4", writer = FFwriter(10))
+        plt.close()
+        # with open(f'{log_folder}/real_plot_{self.total_real_animations}.pkl', 'wb') as f:
+        #         pickle.dump(patches, f)
+        self.total_real_animations += 1
 
     def save_animation(self, pose, targ, mask, fsw, out):
         # save animations
@@ -397,7 +450,7 @@ class TransformerModel:
                 patches.append(patch_set)
             else:
                 break
-        
+
         with open(f'{self.viz_path}/plot_{self.total_animations}.pkl', 'wb') as f:
                 pickle.dump(patches, f)
         self.total_animations += 1
@@ -407,6 +460,10 @@ class TransformerModel:
         print('model loaded')
         self.device = device
         self.model = self.model.to(self.device)
+
+    def confidence_loss(self, out, targ):
+        l = self.loss_scales.confidence_scale * self.confidence_criterion(out, targ)
+        return l
 
     def contact_loss(self, out, targ):
         l = self.loss_scales.contact_scale * self.contact_criterion(out, targ)
