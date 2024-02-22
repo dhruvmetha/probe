@@ -21,13 +21,17 @@ class RunCfg(PrefixProto):
             data_source = [
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_0.pkl', 
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_1.pkl',
-                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_2.pkl'
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_2.pkl',
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_0.pkl', 
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_imm.pkl',
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_mv.pkl',
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_2.pkl'
             ]
 
             inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
             outputs = ['confidence', 'contact', 'movable', 'pose', 'size']
 
-            save_directory = '2_obs/full_prediction'
+            save_directory = '2_obs'
         
         class test:
             # data_source = [
@@ -113,11 +117,11 @@ class RunCfg(PrefixProto):
             sub_folders = ['sep14', 'sep15']
 
             inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
-            outputs = ['contact', 'movable', 'pose', 'size']
+            outputs = ['confidence', 'contact', 'movable', 'pose', 'size']
 
-            log_folder = '2_obs/full_prediction/2024-02-21_22-37-22'
+            log_folder = '2_obs/full_prediction/2024-02-22_04-18-38'
             save_directory = ''
-            ckpt = '2_obs/full_prediction/2024-02-21_22-37-22/checkpoints/transformer_weights_3.pt'
+            ckpt = '2_obs/full_prediction/2024-02-22_04-18-38/checkpoints/transformer_weights_10.pt'
             experiment_name = 'full_prediction_real'
 
     class transformer:
@@ -126,7 +130,7 @@ class RunCfg(PrefixProto):
             hidden_state_size = 1024
             embed_size = 512
             num_heads = 2
-            num_layers = 2
+            num_layers = 4
 
         class data_params:
             obstacles = 2
@@ -149,16 +153,16 @@ class RunCfg(PrefixProto):
         class train_params:
             learning_rate = 1e-4
             epochs = 50
-            train_batch_size = 64
-            val_batch_size = 64
+            train_batch_size = 32
+            val_batch_size = 32
             test_batch_size = 1
             train_test_split = 0.95
 
         class loss_scales:
             confidence_scale = 1
             contact_scale = 1/3
-            movable_scale = 1/2
-            pos_scale = 2
+            movable_scale = 1
+            pos_scale = 5
             yaw_scale = 2 * 10
             size_scale = 2
 

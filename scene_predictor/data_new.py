@@ -62,6 +62,7 @@ class TransformerDataset(Dataset):
                 contact_points = target[:, true_k + 0].nonzero()
                 if len(contact_points) > 0:
                     contact_idx = contact_points[-1][0]
+                    # print(obs_idx, contact_idx, done_idx)
                     final_target[contact_idx:, k] = 1.
                     final_fsw[contact_idx:, k] = 1.
                 k += self.output_dict['confidence']
@@ -161,15 +162,18 @@ if __name__ == '__main__':
 
     import pickle
     from runner_config import RunCfg
+    import random
 
     cfg = RunCfg.transformer.data_params
 
-    data_files = [sorted(glob(f'/common/home/dm1487/Downloads/sep15/2/*.npz'))[-1]]
+    # data_files = [sorted(glob(f'/common/home/dm1487/Downloads/sep15/2/*.npz'))[-1]]
 
-    # with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:
-    #     files = pickle.load(f)
+    with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:
+        files = pickle.load(f)
 
-    files = data_files
-    dataset = RealTransformerDataset(cfg, files, 1500)
-    dataset[0]
+    random.shuffle(files)
+    dataset = TransformerDataset(cfg, files, 1500)
+    for i in range(50):
+        print("#")
+        _ = dataset[i]
     

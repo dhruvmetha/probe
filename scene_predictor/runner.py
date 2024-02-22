@@ -70,6 +70,17 @@ if __name__ == '__main__':
     experiments_folder = f'{save_root}/{experiments_folder}/{model_name}'
     real_experiment_folder = f'{save_root}/{runs.real_experiments_folder}/{model_name}'
 
+    shorts = {
+        'joint_pos': 'q',
+        'joint_vel': 'qd',
+        'torques': 'tau',
+        'pose': 'pose',
+        'size': 'size',
+        'confidence': 'cd',
+        'contact': 'ct',
+        'movable': 'mv'
+    }
+
     if runs.mode == 'train':
         inputs = runs.train.inputs
         outputs = runs.train.outputs
@@ -91,7 +102,9 @@ if __name__ == '__main__':
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
 
-        directory = runs.train.save_directory
+        from_dir = ''.join([shorts[i] for i in inputs])
+        to_dir = ''.join([shorts[i] for i in outputs])
+        directory = f'{runs.train.save_directory}/{from_dir}_to_{to_dir}'
     
         runner = Runner(train_cfg, model_name, train_data_source, save_folder, directory, 'cuda:0')
         runner.learn()

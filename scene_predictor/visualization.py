@@ -44,19 +44,22 @@ def get_real_visualization(obstacle_count,
 
         k += 5
     
-    k = 2
+    k = 3
     for i in range(obstacle_count):
-        # confidence = torch.sigmoid(pred_obstacle_params[k-3])
+        confidence = torch.sigmoid(pred_obstacle_params[k-3]).item()
         contact = torch.sigmoid(pred_obstacle_params[k-2])
         movable = torch.sigmoid(pred_obstacle_params[k-1])
         obs_pos = np.array(pred_obstacle_params[k:k+2])
         obs_rot = np.array(pred_obstacle_params[k+2])  * 180/np.pi
         obs_size = np.array(pred_obstacle_params[k+3:k+5])
         facecolor = 'blue'
-        if torch.sigmoid(movable) > 0.5:
+        if movable > 0.5:
             facecolor = 'orange'
-        patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor=facecolor))
-        k += 7
+        if np.prod(obs_size) > 0.1:
+            patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor=facecolor, alpha=confidence))
+        else:
+            patches.append(pch.Rectangle(obs_pos - obs_size/2, *([0., 0.]), angle=obs_rot, rotation_point='center', facecolor=facecolor))
+        k += 8
     
     return patches
 
@@ -82,10 +85,11 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
                         
 
     # print(estimate_pose)
+        
     if not estimate_pose:
         for i in range(RECTS):
-            fsw_j = i*7 + 3
-            j = i*7 + 3
+            j = i*8 + 3
+            fsw_j = i*8 + 3
             
             confidence = torch.sigmoid(pred[idx][j-3]).item()
             contact = torch.sigmoid(pred[idx][j-2])
@@ -116,8 +120,8 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
             for _ in range(2):
                 patch_set.append(pch.Rectangle(pos - size/2, *(size), angle=angle, rotation_point='center', facecolor=block_color, label=f'true_mov_{i}'))
 
-                if np.prod(size_pred) > 0.05 or confidence > 0.5:
-                    patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *(size_pred), angle=angle_pred, rotation_point='center', facecolor=pred_block_color,  label=f'pred_mov_{i}'))
+                if np.prod(size_pred) > 0.05:
+                    patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *(size_pred), angle=angle_pred, rotation_point='center', facecolor=pred_block_color, alpha=confidence, label=f'pred_mov_{i}'))
                 else:
                     patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *([0., 0.]), angle=angle_pred, rotation_point='center', facecolor=pred_block_color,  label=f'pred_mov_{i}'))
                 

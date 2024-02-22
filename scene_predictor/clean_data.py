@@ -71,7 +71,7 @@ if __name__ == '__main__':
     # files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/aug27/2_obs/1/*/*.npz')
     root_path = '/common/users/dm1487/legged_manipulation_data_store'
     root_traj_path = f'{root_path}/trajectories'
-    sub_path = 'iros24_play_feb21/2_obs'
+    sub_path = 'iros24_play_feb22/2_obs'
 
     files = glob(f'{root_traj_path}/{sub_path}/*/*/*.npz')
     # with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:

@@ -81,7 +81,7 @@ if __name__ == '__main__':
     # SEED = 20
     root_path = '/common/users/dm1487/legged_manipulation_data_store'
     root_traj_path = f'{root_path}/trajectories'
-    sub_path = 'iros24_play_feb19/2_obs'
+    sub_path = 'iros24_play_feb22/2_obs'
     all_files = glob.glob(f"{root_path}/{sub_path}/*/*/*.npz") # + glob.glob(f"/common/users/dm1487/legged_manipulation_data_store/2_obs/sep16/*lag_6*/*/*.npz")
 
     print(len(all_files))
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     small_set = []
     small_set += all_files
     random.shuffle(small_set) 
-    sub_path = 'iros24_play_feb21/2_obs'
+    # sub_path = 'iros24_play_feb22/2_obs'
     dest_path = Path(f'{root_traj_path}/{sub_path}/all_data')
     dest_path.mkdir(parents=True, exist_ok=True)
     main(small_set, dest_path)

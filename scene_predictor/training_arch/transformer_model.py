@@ -28,7 +28,7 @@ class TransformerModel:
         self.cfg = cfg
 
         self.model_params = cfg.model_params
-        self.train_params = cfg.train_params
+        self.train_params = cfg.train_para  ms
         self.data_params = cfg.data_params
         self.loss_scales = cfg.loss_scales
         self.logging = cfg.logging
@@ -133,11 +133,12 @@ class TransformerModel:
         confidence_mask = torch.ones((targ.shape[0], targ.shape[1], 1), device=self.device, requires_grad=False)
         targ_clone = targ.clone()
         
+        # print("######")
         # object 1
         loss_list = []
         for obs_idx in range(self.num_obstacles):
             if 'confidence' in self.output_args:
-                confidence_mask = (targ_clone[:, :, k+0:k+1]).float()
+                # confidence_mask = (targ_clone[:, :, k+0:k+1]).float()
                 loss_list.append(torch.sum(self.confidence_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) * mask)/torch.sum(mask))
                 k += 1
 
@@ -159,6 +160,10 @@ class TransformerModel:
             if 'size' in self.output_args:
                 loss_list.append(torch.sum((self.size_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 2
+
+        # for i, j in zip(['confidence', 'contact', 'movable', 'pose', 'yaw', 'size', 'confidence', 'contact', 'movable', 'pose', 'yaw', 'size'], loss_list):
+        #     print(i, j.item())
+        # print('---')
 
         return loss_list
         # contact_loss1 = self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
