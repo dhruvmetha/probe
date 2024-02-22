@@ -28,7 +28,7 @@ class TransformerModel:
         self.cfg = cfg
 
         self.model_params = cfg.model_params
-        self.train_params = cfg.train_para  ms
+        self.train_params = cfg.train_params
         self.data_params = cfg.data_params
         self.loss_scales = cfg.loss_scales
         self.logging = cfg.logging
