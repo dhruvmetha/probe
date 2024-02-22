@@ -121,8 +121,12 @@ class TransformerModel:
 
     def _init_scales(self):
         self.pose_scale = torch.tensor([1/0.25, 1, 3.14], device=self.device)
-        self.targ_scale = torch.tensor([1, 1, 1/0.25, 1, 3.14, 1, 1.7] * 2, device=self.device)
-        self.fsw_scale = torch.tensor([1, 1, 1, 1, 1, 1, 1, 1] * 2)
+        if 'confidence' in self.output_args:
+            self.targ_scale = torch.tensor([1, 1, 1, 1/0.25, 1, 3.14, 1, 1.7] * 2, device=self.device)
+            self.fsw_scale = torch.tensor([1, 1, 1, 1, 1, 1, 1, 1] * self.num_obstacles)
+        else:
+            self.targ_scale = torch.tensor([1, 1, 1/0.25, 1, 3.14, 1, 1.7] * 2, device=self.device)
+            self.fsw_scale = torch.tensor([1, 1, 1, 1, 1, 1, 1] * self.num_obstacles)
 
     def loss_func(self, targ, out, mask):
         k = 0
@@ -134,33 +138,27 @@ class TransformerModel:
         for obs_idx in range(self.num_obstacles):
             if 'confidence' in self.output_args:
                 confidence_mask = (targ_clone[:, :, k+0:k+1]).float()
-                confidence_loss1 = self.confidence_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
+                loss_list.append(torch.sum(self.confidence_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) * mask)/torch.sum(mask))
                 k += 1
-                loss_list.append(torch.sum(confidence_loss1 * mask)/torch.sum(mask))
 
             if 'contact' in self.output_args:
-                contact_loss1 = self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
+                loss_list.append(torch.sum(self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) * mask)/torch.sum(mask))
                 k += 1
-                loss_list.append(torch.sum(contact_loss1 * mask)/torch.sum(mask))
 
             if 'movable' in self.output_args:
-                movable_loss1 = self.movable_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) *  confidence_mask
+                loss_list.append(torch.sum((self.movable_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 1
-                loss_list.append(torch.sum(movable_loss1 * mask)/torch.sum(mask))
 
             if 'pose' in self.output_args:
-                pos_loss1 = self.pos_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask
+                loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 2
-                loss_list.append(torch.sum(pos_loss1 * mask)/torch.sum(mask))
 
-                yaw_loss1 = self.yaw_loss(out[:, :, k:k+1], targ[:, :, k:k+1])
+                loss_list.append(torch.sum((self.yaw_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 1
-                loss_list.append(torch.sum(yaw_loss1 * mask)/torch.sum(mask))
 
             if 'size' in self.output_args:
-                size_loss1 = self.size_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask
+                loss_list.append(torch.sum((self.size_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 2
-                loss_list.append(torch.sum(size_loss1 * mask)/torch.sum(mask))
 
         return loss_list
         # contact_loss1 = self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])

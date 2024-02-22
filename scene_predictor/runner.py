@@ -47,7 +47,16 @@ if __name__ == '__main__':
     from runner_config import RunCfg
     from glob import glob
     runs = RunCfg.runs
-    
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--mode', type=str, default='train', help='train, sim_test, real_test')
+    parser.add_argument('--animation', type=bool, default=False, help='do animation or not.')
+
+    args = parser.parse_args()
+
+    runs.mode = args.mode
+
     model_name  = runs.model_name
     train_cfg = RunCfg.transformer # eval(f"RunCfg.{model_name}")
     train_data_source = runs.train.data_source
@@ -76,7 +85,7 @@ if __name__ == '__main__':
 
         train_cfg.data_params.inputs = new_input_params
         train_cfg.data_params.outputs = new_output_params
-        train_cfg.logging.animation = False
+        train_cfg.logging.animation = args.animation
         # train_cfg.train_params.epochs = 10
 
         if not os.path.exists(save_folder):

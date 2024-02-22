@@ -20,8 +20,7 @@ class RunCfg(PrefixProto):
 
             data_source = [
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_0.pkl', 
-                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_mv.pkl', 
-                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_imm.pkl', 
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_1.pkl',
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_2.pkl'
             ]
 
@@ -118,7 +117,7 @@ class RunCfg(PrefixProto):
 
             log_folder = '2_obs/full_prediction/2024-02-21_22-37-22'
             save_directory = ''
-            ckpt = '2_obs/full_prediction/2024-02-21_22-37-22/checkpoints/transformer_weights_1.pt'
+            ckpt = '2_obs/full_prediction/2024-02-21_22-37-22/checkpoints/transformer_weights_3.pt'
             experiment_name = 'full_prediction_real'
 
     class transformer:
