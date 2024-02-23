@@ -20,9 +20,13 @@ def remove_files(files, here):
             except:
                 pass
             continue
-
-        if data['target'][10, 0] == 0. and data['target'][10, 1] == 0.:
-            print('pose error', file)
+        
+        try:
+            if data['target'][10, 0] == 0. and data['target'][10, 1] == 0.:
+                print('pose error', file)
+                os.remove(file)
+        except:
+            print('file error', file)
             os.remove(file)
 
 def main(all_files):
