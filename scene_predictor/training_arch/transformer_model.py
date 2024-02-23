@@ -74,9 +74,6 @@ class TransformerModel:
             if not os.path.exists(self.viz_path):
                 os.makedirs(self.viz_path)
 
-        
-        
-
         # src_mask
         self.src_mask = torch.triu(torch.ones(self.model_params.sequence_length, self.model_params.sequence_length), diagonal=1).bool().to(device)
 
@@ -84,8 +81,6 @@ class TransformerModel:
         self._init_scales()
         self.total_animations = 0
         self.total_real_animations = 0
-
-        
 
         # loss functions
         self.confidence_criterion = nn.BCEWithLogitsLoss(reduction='none')
@@ -160,6 +155,9 @@ class TransformerModel:
             if 'size' in self.output_args:
                 loss_list.append(torch.sum((self.size_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 2
+
+            # if 'collision' in self.output_args:
+            # physics constraints?
 
         # for i, j in zip(['confidence', 'contact', 'movable', 'pose', 'yaw', 'size', 'confidence', 'contact', 'movable', 'pose', 'yaw', 'size'], loss_list):
         #     print(i, j.item())
@@ -487,3 +485,6 @@ class TransformerModel:
     
     def size_loss(self, out, targ):
         return self.loss_scales.size_scale * F.mse_loss(out, targ, reduction='none')
+    
+    # def collision_loss(self, out, targ):
+    #     torch.norm(out - targ, dim=-1)

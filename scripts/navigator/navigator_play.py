@@ -46,7 +46,7 @@ if __name__ == "__main__":
         # '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-15/navigator_train/050321.571692', 
         '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-17/navigator_train/012555.571562', 
         # '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-18/navigator_train/035410.215673',
-        '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-19/navigator_train/055837.269443',
+        # '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-19/navigator_train/055837.269443',
     ]
     # recent_runs = ['/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-19/navigator_train/064525.312710']
 
@@ -66,12 +66,12 @@ if __name__ == "__main__":
     torch.manual_seed(SEED)
     random.seed(SEED)
     
-    Cfg.env.num_envs = 2048
+    Cfg.env.num_envs = 5
     Cfg.env.max_episode_length = 1499
     Cfg.env.num_observation_history = 750
     Cfg.env.num_observations = 8
-    save_data = True
-    headless = True
+    save_data = False
+    headless = False
     obs_name = '2_obs'
     
     env = Navigator(Cfg, sim_device='cuda:0', headless=headless, random_pose=False, use_localization_model=False, use_obstacle_model=False, inference_device='cuda:0')
