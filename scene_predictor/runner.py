@@ -1,4 +1,5 @@
 from training_arch.transformer_model import TransformerModel
+from training_arch.velocity_model import VelocityTransformerModel
 from params_proto import PrefixProto
 
 import os
@@ -6,6 +7,7 @@ import json
 
 ARCHS = {
     'transformer': TransformerModel,
+    'velocity_model': VelocityTransformerModel
 }
 class Runner:
     def __init__(self, train_cfg, model_name, data_source, save_folder, directory, device='cuda:0'):
@@ -44,10 +46,9 @@ class Runner:
         #     json.dump(data, f)
 
 if __name__ == '__main__':
+    import argparse
     from runner_config import RunCfg
     from glob import glob
-    runs = RunCfg.runs
-    import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='train', help='train, sim_test, real_test')
@@ -55,10 +56,11 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    runs = RunCfg.runs
     runs.mode = args.mode
 
     model_name  = runs.model_name
-    train_cfg = RunCfg.transformer # eval(f"RunCfg.{model_name}")
+    train_cfg = eval(f"RunCfg.{model_name}")
     train_data_source = runs.train.data_source
     test_data_source = runs.test.data_source
     real_data_source = runs.real_test.root_folder
@@ -78,7 +80,8 @@ if __name__ == '__main__':
         'size': 'size',
         'confidence': 'cd',
         'contact': 'ct',
-        'movable': 'mv'
+        'movable': 'mv',
+        'velocity': 'vel'
     }
 
     if runs.mode == 'train':
@@ -112,11 +115,13 @@ if __name__ == '__main__':
         if not os.path.exists(experiments_folder):
             os.makedirs(experiments_folder)
 
+        input_params = train_cfg.data_params.inputs.copy()
+        output_params = train_cfg.data_params.outputs.copy()
+
         for idx in range(len(runs.test.inputs)):
             inputs = runs.test.inputs[idx]
             outputs = runs.test.outputs[idx]
-            input_params = train_cfg.data_params.inputs
-            output_params = train_cfg.data_params.outputs
+            
             new_input_params = {}
             for i in inputs:
                 new_input_params[i] = input_params[i]

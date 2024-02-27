@@ -3,6 +3,7 @@ from scene_predictor.model import MiniTransformer
 from scene_predictor.visualization import get_visualization 
 import pickle
 
+    
 
 class PoseInference:
     def __init__(self, model_path='', sequence_length=750, device='cuda:0'):

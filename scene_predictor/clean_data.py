@@ -20,8 +20,15 @@ def remove_files(files, here):
             except:
                 pass
             continue
-
-        if data['target'][10, 0] == 0. and data['target'][10, 1] == 0.:
+        
+        try:
+            if data['target'][10, 0] == 0. and data['target'][10, 1] == 0.:
+                print('pose error', file)
+                os.remove(file)
+            data['done']
+            data['target_env']
+            data['target']
+        except:
             print('pose error', file)
             os.remove(file)
 
@@ -71,7 +78,7 @@ if __name__ == '__main__':
     # files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/aug27/2_obs/1/*/*.npz')
     root_path = '/common/users/dm1487/legged_manipulation_data_store'
     root_traj_path = f'{root_path}/trajectories'
-    sub_path = 'iros24_play_feb22/2_obs'
+    sub_path = 'iros24_play_feb23_new_policy/2_obs'
 
     files = glob(f'{root_traj_path}/{sub_path}/*/*/*.npz')
     # with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:

@@ -146,8 +146,11 @@ class TransformerModel:
                 k += 1
 
             if 'pose' in self.output_args:
-                loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask) * mask)/torch.sum(mask))
-                k += 2
+                loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
+                k += 1
+
+                loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
+                k += 1
 
                 loss_list.append(torch.sum((self.yaw_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 1
@@ -309,25 +312,30 @@ class TransformerModel:
                     # first_contact = 0
                     check_first_contact = gt_target[0, :, gt_k+0:gt_k+1].nonzero()
                     if len(check_first_contact) > 0:
-                        first_contact = check_first_contact.nonzero()[0][0]
+                        try:
+                            first_contact = check_first_contact.nonzero()[0][0]
+                        except:
+                            gt_k += 9
+                            k += self.output_size
+                            continue
                     else:
                         gt_k += 9
                         k += self.output_size
                         continue
 
                     if 'confidence' in self.output_args:
-                        k += self.output_args['confidence']
+                        k += 1 # self.output_args['confidence']
                     
                     if 'contact' in self.output_args:
                         # record_seq_loss.append(self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]))
                         # record_final_loss.append(self.contact_loss(out[:, done_idx, k+0:k+1], targ[:, done_idx, k+0:k+1]))
-                        k += self.output_args['contact']
+                        k += 1 # self.output_args['contact']
                     if 'movable' in self.output_args:
-                        movable_loss = F.binary_cross_entropy_with_logits(out[:, :, k:k+1], targ[:, :, k:k+1], reduction='none')
-                        
-                        record_seq_loss['movable'][sub_key].append((torch.sum(movable_loss[0, first_contact:done_idx, :], dim=0)/(done_idx-first_contact)).cpu().numpy())
-                        record_final_loss['movable'][sub_key].append(movable_loss[0, done_idx-1, :].cpu().numpy())
-                        k += self.output_args['movable']
+                        success_mov_class = ((torch.sigmoid(out[:, :, k:k+1]) > 0.5) * 1. == targ[:, :, k:k+1]) * 1.0
+                        # movable_loss = F.binary_cross_entropy_with_logits(out[:, :, k:k+1], targ[:, :, k:k+1], reduction='none')
+                        record_seq_loss['movable'][sub_key].append((torch.sum(success_mov_class[0, first_contact:done_idx, :], dim=0)/(done_idx-first_contact)).cpu().numpy())
+                        record_final_loss['movable'][sub_key].append(success_mov_class[0, done_idx-1, :].cpu().numpy())
+                        k += 1 # self.output_args['movable']
                     
                     if 'pose' in self.output_args:
                         out[:, :, k:k+3] = out[:, :, k:k+3] * self.targ_scale[2:5]
@@ -342,7 +350,7 @@ class TransformerModel:
 
                         record_seq_loss['pose'][sub_key].append((torch.sum(pos_loss[0, first_contact:done_idx, :], dim=0)/(done_idx-first_contact)).cpu().numpy())
                         record_final_loss['pose'][sub_key].append(pos_loss[0, done_idx-1, :].cpu().numpy())
-                        k += self.output_args['pose']
+                        k += 3 # self.output_args['pose']
                     
                     if 'size' in self.output_args:
                         out[:, :, k:k+2] = out[:, :, k:k+2] * self.targ_scale[5:7]
@@ -351,7 +359,7 @@ class TransformerModel:
                         size_loss = torch.abs(out[:, :, k:k+2] - targ[:, :, k:k+2])
                         record_seq_loss['size'][sub_key].append((torch.sum(size_loss[0, first_contact:done_idx, :], dim=0)/(done_idx-first_contact)).cpu().numpy())
                         record_final_loss['size'][sub_key].append(size_loss[0, done_idx-1, :].cpu().numpy())
-                        k += self.output_args['size']
+                        k += 2 # self.output_args['size']
 
                     gt_k += 9
 
@@ -488,6 +496,3 @@ class TransformerModel:
     
     def size_loss(self, out, targ):
         return self.loss_scales.size_scale * F.mse_loss(out, targ, reduction='none')
-    
-    # def collision_loss(self, out, targ):
-    #     torch.norm(out - targ, dim=-1)

@@ -75,9 +75,13 @@ wandb/
 dhruv/
 data_ctr.pkl
 data_ctr_*.pkl
+velocity_predictor/
 scene_predictor/balanced_data.pkl
 scene_predictor/balanced_data_*.pkl
 scene_predictor/results*
 scene_predictor/decoupled_inference
-scene_predictor/experiment_results
+scene_predictor/*experiment*
 real_robot_data/
+scene_predictor/real data videos
+demo_vids*
+*.csv*

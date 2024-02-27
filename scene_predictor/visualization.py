@@ -46,7 +46,7 @@ def get_real_visualization(obstacle_count,
     
     k = 3
     for i in range(obstacle_count):
-        confidence = torch.sigmoid(pred_obstacle_params[k-3]).item()
+        confidence = (torch.sigmoid(pred_obstacle_params[k-3]).item() > 0.0) * 1.
         contact = torch.sigmoid(pred_obstacle_params[k-2])
         movable = torch.sigmoid(pred_obstacle_params[k-1])
         obs_pos = np.array(pred_obstacle_params[k:k+2])

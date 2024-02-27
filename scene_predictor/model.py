@@ -3,7 +3,7 @@ import torch
 import math
 
 class MiniTransformer(nn.Module):
-    def __init__(self, input_size, output_size, num_obstacles, embed_size=512, hidden_size=2048, num_heads=8, max_sequence_length=250, num_layers=6, estimate_pose=True, layer_norm=True):
+    def __init__(self, input_size, output_size, num_obstacles=1, embed_size=512, hidden_size=2048, num_heads=8, max_sequence_length=250, num_layers=6, estimate_pose=True, layer_norm=True):
         super(MiniTransformer, self).__init__()
 
         self.batch_first = True
@@ -18,7 +18,8 @@ class MiniTransformer(nn.Module):
         
         self.activation = nn.ELU()
 
-        self.linear_out = nn.Linear(embed_size, embed_size)
+        # self.linear_out = nn.Linear(embed_size, embed_size)
+        self.linear_out = nn.Linear(embed_size, output_size*num_obstacles)
 
         self.layer_norm = layer_norm
         if self.layer_norm:
@@ -41,6 +42,7 @@ class MiniTransformer(nn.Module):
         else:
             x = self.encoder(x, mask=src_mask)
         x = self.linear_out(x)
+        # return x
         if self.layer_norm:
             x = self.layer_norm_out(x)
         x = self.dropout(x)

@@ -187,7 +187,7 @@ if __name__ == '__main__':
 
     root_path = '/common/users/dm1487/legged_manipulation_data_store'
     root_traj_path = f'{root_path}/trajectories'
-    sub_path = 'iros24_play_feb22/2_obs'
+    sub_path = 'iros24_play_feb23_same_policy/2_obs'
 
     main_folder = f'{root_traj_path}/{sub_path}'
     data_folder = f'{main_folder}/all_data'
@@ -237,7 +237,7 @@ if __name__ == '__main__':
     for key in all_files.keys():
         with open(f'{balance_folder}/train_{key}.pkl', 'wb') as f:
             if key == 'mv' or key == 'imm':
-                pickle.dump(all_files[key][:], f)
+                pickle.dump(all_files[key][:data_len], f)
             else:
                 pickle.dump(all_files[key][:data_len], f)
 

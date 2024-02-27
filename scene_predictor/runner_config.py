@@ -1,14 +1,13 @@
 from params_proto import PrefixProto
 
 class RunCfg(PrefixProto):
-
     class runs:
         device = 'cuda:0'
         mode = 'train' # 'train', 'sim_test', 'real_test'
-        model_name = 'transformer'
+        model_name = 'transformer' # 'transformer', 'velocity_model'
         save_root = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor'
         log_folder = 'results'
-        experiments_folder = 'experiments_on_contact'
+        experiments_folder = 'experiments_feb23_new_policy'
         real_experiments_folder = 'real_experiments'
         class train:
             # data_source = [
@@ -28,8 +27,10 @@ class RunCfg(PrefixProto):
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_2.pkl'
             ]
 
-            inputs = ['pose']
+            inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
             outputs = ['confidence', 'contact', 'movable', 'pose', 'size']
+            # inputs = ['joint_pos', 'joint_vel', 'torques']
+            # outputs = ['velocity']
 
             save_directory = '2_obs'
         
@@ -40,9 +41,14 @@ class RunCfg(PrefixProto):
             #     ]
             
             data_source = [
-                ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_imm.pkl'], 
-                ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_mv.pkl'], 
-                ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_2.pkl']]
+                [
+                    '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb23_new_policy/2_obs/balanced/train_0.pkl', 
+                    '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb23_new_policy/2_obs/balanced/train_1.pkl',
+                    '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb23_new_policy/2_obs/balanced/train_2.pkl'
+                ]
+                # ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_mv.pkl'], 
+                # ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_2.pkl']
+            ]  * 5
 
             log_folder = 'losses'
             
@@ -93,14 +99,16 @@ class RunCfg(PrefixProto):
             #     ]
             # experiment_name = ['p_from_qqdot_static', 'p_from_qqdot_movable', 'p_from_qqdot_both']
 
-            inputs = [['joint_pos'], ['joint_pos'], ['joint_pos']]
-            outputs = [['pose'], ['pose'], ['pose']]
+            inputs = [['joint_pos'], ['joint_pos', 'joint_vel'], ['joint_pos', 'joint_vel', 'torques'], ['joint_pos', 'joint_vel', 'torques', 'pose'], ['pose']]
+            outputs = [['confidence', 'contact', 'movable', 'pose', 'size']] * 5 
             ckpt = [
-                'p_from_q/2024-02-20_07-56-29/checkpoints/transformer_weights_9.pt',
-                'p_from_q/2024-02-20_07-56-29/checkpoints/transformer_weights_9.pt',
-                'p_from_q/2024-02-20_07-56-29/checkpoints/transformer_weights_9.pt'
-                ]
-            experiment_name = ['p_from_q_static', 'p_from_q_movable', 'p_from_q_both']
+                '2_obs/q_to_cdctmvposesize/2024-02-22_20-48-49/checkpoints/transformer_weights_9.pt',
+                '2_obs/qqd_to_cdctmvposesize/2024-02-22_20-54-47/checkpoints/transformer_weights_9.pt',
+                '2_obs/qqdtau_to_cdctmvposesize/2024-02-22_20-56-43/checkpoints/transformer_weights_9.pt',
+                '2_obs/qqdtaupose_to_cdctmvposesize/2024-02-22_20-56-53/checkpoints/transformer_weights_9.pt',
+                '2_obs/pose_to_cdctmvposesize/2024-02-22_20-57-43/checkpoints/transformer_weights_9.pt',
+            ]
+            experiment_name = ['all_from_q', 'all_from_qqdot', 'all_from_qqdottau', 'all_from_qqdottaupose', 'all_from_pose']
 
             # inputs = [['pose'], ['pose'], ['pose']]
             # outputs = [['pose'], ['pose'], ['pose']]
@@ -114,17 +122,19 @@ class RunCfg(PrefixProto):
 
         class real_test:
             root_folder = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/real_robot_data'
-            sub_folders = ['sep14', 'sep15']
+            # sub_folders = ['sep14', 'sep15', 'feb22_feb25']
+            sub_folders = ['feb22_feb26', 'sep14', 'sep15']
 
             inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
             outputs = ['confidence', 'contact', 'movable', 'pose', 'size']
 
             log_folder = '2_obs/full_prediction/2024-02-22_04-18-38'
             save_directory = ''
-            ckpt = '2_obs/full_prediction/2024-02-22_04-18-38/checkpoints/transformer_weights_10.pt'
+            # ckpt = '2_obs/qqdtau_to_cdctmvposesize/2024-02-22_20-56-43/checkpoints/transformer_weights_15.pt'
+            ckpt = '2_obs/qqdtaupose_to_cdctmvposesize/2024-02-26_18-19-49/checkpoints/transformer_weights_5.pt'
             experiment_name = 'full_prediction_real'
 
-class transformer:
+    class transformer:
         class model_params:
             sequence_length = 1500
             hidden_state_size = 1024
@@ -172,3 +182,43 @@ class transformer:
             print_every = 50
             test_every = eval_every
             animation = True
+
+    class velocity_model:
+        class model_params:
+            sequence_length = 1500
+            hidden_state_size = 64
+            embed_size = 64
+            num_heads = 2
+            num_layers = 2
+
+        class data_params:
+            inputs = {
+                    'joint_pos' : 12, 
+                    'joint_vel': 12, 
+                    'torques': 12, 
+                    'projected_gravity': 3, 
+                    'pose': 3
+                    }
+            outputs = {
+                    'velocity': 2
+                    }
+        
+        class train_params:
+            learning_rate = 1e-4
+            epochs = 5
+            train_batch_size = 32
+            val_batch_size = 32
+            test_batch_size = 1
+            train_test_split = 0.95
+
+        class loss_scales:
+            velocity_scale = 1
+
+        class logging:
+            eval_every = 200
+            save_every = 500
+            print_every = 50
+            test_every = eval_every
+            animation = True
+
+    

@@ -195,19 +195,19 @@ TASK_ONE = [
             'density': [10000][::-1]
         },
 
-        {
-            'name': ['fixed_block_4'][::-1],
-            'size': [[lambda : round(np.random.uniform(*[0.4, 0.4]), 2), lambda: round(np.random.uniform(*[0.3, 1.0]), 2), lambda: 0.4]][::-1], 
-            'pos': [[round(np.random.uniform(*world_cfg.fixed_block.pos_x_range), 2), round(np.random.uniform(*world_cfg.fixed_block.pos_y_range), 2), 0.2]][::-1],
-            'density': [10000][::-1]
-        },
+        # {
+        #     'name': ['fixed_block_4'][::-1],
+        #     'size': [[lambda : round(np.random.uniform(*[0.4, 0.4]), 2), lambda: round(np.random.uniform(*[0.3, 1.0]), 2), lambda: 0.4]][::-1], 
+        #     'pos': [[round(np.random.uniform(*world_cfg.fixed_block.pos_x_range), 2), round(np.random.uniform(*world_cfg.fixed_block.pos_y_range), 2), 0.2]][::-1],
+        #     'density': [10000][::-1]
+        # },
 
-        {
-            'name': ['fixed_block_5'][::-1],
-            'size': [[lambda : round(np.random.uniform(*[0.4, 0.4]), 2), lambda: round(np.random.uniform(*[0.3, 1.0]), 2), lambda: 0.4]][::-1], 
-            'pos': [[round(np.random.uniform(*world_cfg.fixed_block.pos_x_range), 2), round(np.random.uniform(*world_cfg.fixed_block.pos_y_range), 2), 0.2]][::-1],
-            'density': [10000][::-1]
-        },
+        # {
+        #     'name': ['fixed_block_5'][::-1],
+        #     'size': [[lambda : round(np.random.uniform(*[0.4, 0.4]), 2), lambda: round(np.random.uniform(*[0.3, 1.0]), 2), lambda: 0.4]][::-1], 
+        #     'pos': [[round(np.random.uniform(*world_cfg.fixed_block.pos_x_range), 2), round(np.random.uniform(*world_cfg.fixed_block.pos_y_range), 2), 0.2]][::-1],
+        #     'density': [10000][::-1]
+        # },
 
         {
             'name': ['movable_block_3'][::-1],

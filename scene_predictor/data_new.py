@@ -86,9 +86,7 @@ class TransformerDataset(Dataset):
                 final_target[:, k:k+self.output_dict['size']] = target[:, true_k + 5: true_k + 7] * torch.tensor([1, 1/1.7])
                 final_fsw[:, k:k+self.output_dict['size']] = fsw[:, true_k + 5: true_k + 7]
                 k += self.output_dict['size']
-        # final_target[:, :7] = target[:, :7]
-        # final_target[:, 7:] = target[:, 9:16]
-        # final_target *= torch.tensor([1, 1, 0.25, 1, 1/3.14, 1, 1/1.7] * 2)
+     
 
         # teacher forcing
         shifted_final_target = torch.zeros((self.sequence_length, int(self.obstacles * self.output_size)))
@@ -96,11 +94,6 @@ class TransformerDataset(Dataset):
         teacher_force = False
         if teacher_force:
             inputs = torch.cat([inputs, shifted_final_target], dim=-1)
-        
-        # final_fsw = torch.zeros((self.sequence_length, int(self.obstacles * self.output_size)))
-        # fsw = torch.tensor(data['fsw'])
-        # final_fsw[:, :7] = fsw[:, :7]
-        # final_fsw[:, 7:] = fsw[:, 9:16]
 
         mask = torch.tensor(data['done'])[:].unsqueeze(-1)
 
@@ -157,6 +150,55 @@ class RealTransformerDataset(Dataset):
         mask[:end, :] = True
         
         return inputs, target, mask, pose
+    
+
+class VelocityTransformerDataset(Dataset):
+    def __init__(self, cfg, files, sequence_length):
+        
+        self.output_size = sum(cfg.outputs.values())
+        self.input_dict = cfg.inputs
+        self.output_dict = cfg.outputs
+
+        self.files = files
+        self.sequence_length = int(sequence_length)
+    
+    def __len__(self):
+        return int((len(self.files)))
+    
+    def __getitem__(self, idx):
+        data = np.load(self.files[idx])
+        
+        # data keys: input, target, target_env, actions, ll_actions, fsw, done 
+
+        # input data
+        inp = torch.tensor(data['input']) # project_gravity 3, joint_pos 12, joint_vel 12, torques 12
+
+        # split inp
+        projected_gravity = inp[:, :3]
+        joint_pos = inp[:, 3:15]
+        joint_vel = inp[:, 15:27]
+        torques = inp[:, 27:39] * 0.08 # scale torques
+        pose = torch.tensor(data['target'])[:, :3]
+        vel = torch.tensor(data['target'])[:, 3:5]
+        
+        inputs = {
+            'projected_gravity': projected_gravity,
+            'joint_pos': joint_pos,
+            'joint_vel': joint_vel,
+            'torques': torques, # scale torques,
+            'pose': pose
+        }
+
+        inputs = [inputs[k] for k in self.input_dict.keys()]
+        inputs = torch.cat(inputs, dim=-1)
+
+        done_idx = data['done'][:].nonzero()[0][-1]
+        
+        # target data
+        target = vel
+        mask = torch.tensor(data['done'])[:].unsqueeze(-1)
+
+        return inputs, target, mask
     
 if __name__ == '__main__':
 

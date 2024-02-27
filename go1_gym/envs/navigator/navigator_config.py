@@ -279,7 +279,7 @@ class Cfg(PrefixProto, cli=False):
         terminal_time_out = -1.0 # -5.0
         terminal_distance_gs = 10.0
        
-        distance = -0.01 # -1e-3
+        distance = -0.03 # -1e-3
         time = -0.01
         side_limits = -0.05
         heading = -0.05

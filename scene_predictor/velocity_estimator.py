@@ -83,9 +83,6 @@ class VelocityEstimator:
     def alternate_loss_fn(self, out, targ):
         k = 0
 
-        
-
-
         loss_object_1 = self.contact_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k:k+1]), targ[:, :, k:k+1], reduction='none') + self.movable_scale * F.binary_cross_entropy(torch.sigmoid(out[:, :, k+1:k+2]), targ[:, :, k+1:k+2], reduction='none') 
         loss_object_1 += (self.pose_scale * torch.sum(F.mse_loss(out[:, :, k+2:k+4], targ[:, :, k+2:k+4], reduction='none'), dim=-1).unsqueeze(-1))
         loss_object_1 += (self.yaw_scale * torch.sum(F.mse_loss(out[:, :, k+4:k+5], targ[:, :, k+4:k+5], reduction='none'), dim=-1).unsqueeze(-1))
