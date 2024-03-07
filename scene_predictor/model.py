@@ -17,6 +17,7 @@ class MiniTransformer(nn.Module):
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers)
         
         self.activation = nn.ELU()
+        
 
         # self.linear_out = nn.Linear(embed_size, embed_size)
         self.linear_out = nn.Linear(embed_size, output_size*num_obstacles)
@@ -42,7 +43,7 @@ class MiniTransformer(nn.Module):
         else:
             x = self.encoder(x, mask=src_mask)
         x = self.linear_out(x)
-        # return x
+        return x
         if self.layer_norm:
             x = self.layer_norm_out(x)
         x = self.dropout(x)

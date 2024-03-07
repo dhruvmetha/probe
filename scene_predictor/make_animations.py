@@ -14,7 +14,7 @@ estimate_pose = False
 
 # RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/results/transformer/full_from_qqdottau/*'))[-1]
 RECENT_MODEL = sorted(glob.glob(f'./scene_predictor/results/transformer/2_obs/qqdtaupose_to_cdctmvposesize/*'))[-1]
-# RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer/2_obs/full_prediction/2024-02-22_02-45-10'
+# RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer/2_obs/qqdtauposevel_to_cdctmvposesize/2024-03-02_16-41-01'
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_750_2048/2023-05-20_00-36-45'
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results/transformer_750_2048/2023-05-20_15-21-17'
 # RECENT_MODEL = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results_2_obs_se/2023-08-28_18-51-51'

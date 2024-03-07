@@ -2,6 +2,7 @@ from data_new import TransformerDataset, RealTransformerDataset
 from model import MiniTransformer
 from runner_config import RunCfg
 from torch.utils.data import DataLoader
+from scene_predictor.evaluate_iou import get_bbox_intersections
 from params_proto import PrefixProto
 from visualization import get_visualization, get_real_visualization
 from tqdm import tqdm
@@ -18,6 +19,7 @@ import torch.optim as optim
 import numpy as np
 import pickle
 import os
+import random
 import sys
 
 FFwriter = animation.FFMpegWriter
@@ -93,7 +95,9 @@ class TransformerModel:
         if type(data_source) == list:
             for i in range(len(data_source)):
                 with open(data_source[i], 'rb') as file:
+                    prev_len = len(all_datafiles)
                     all_datafiles += pickle.load(file)
+                    print(data_source[i], len(all_datafiles) - prev_len)
         else:
             with open(data_source, 'rb') as file:
                 all_datafiles += pickle.load(file)
@@ -130,60 +134,63 @@ class TransformerModel:
         
         # print("######")
         # object 1
+        
         loss_list = []
+        
+        # poses = []
         for obs_idx in range(self.num_obstacles):
+            obstacle_losses = []
+            # print("#####", obs_idx)
             if 'confidence' in self.output_args:
                 # confidence_mask = (targ_clone[:, :, k+0:k+1]).float()
                 loss_list.append(torch.sum(self.confidence_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) * mask)/torch.sum(mask))
                 k += 1
 
+                # obstacle_losses.append(loss_list[-1].item())
+                # print('confidence', loss_list[-1].item())
+
             if 'contact' in self.output_args:
                 loss_list.append(torch.sum(self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) * mask)/torch.sum(mask))
                 k += 1
+                # obstacle_losses.append(loss_list[-1].item())
+                # print('contact', loss_list[-1].item())
 
             if 'movable' in self.output_args:
                 loss_list.append(torch.sum((self.movable_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 1
+                # obstacle_losses.append(loss_list[-1].item())
+                # print('movable', loss_list[-1].item())
 
             if 'pose' in self.output_args:
+                # poses.append(out[:, :, k:k+2])
                 loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 1
+                # obstacle_losses.append(loss_list[-1].item())
+                # print('pose x', loss_list[-1].item())
 
-                loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
+                loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) * 2 *  confidence_mask) * mask)/torch.sum(mask))
                 k += 1
+                # obstacle_losses.append(loss_list[-1].item())
+                # print('pose y', loss_list[-1].item())
 
                 loss_list.append(torch.sum((self.yaw_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 1
+                # obstacle_losses.append(loss_list[-1].item())
+                # print('yaw', loss_list[-1].item())
 
             if 'size' in self.output_args:
                 loss_list.append(torch.sum((self.size_loss(out[:, :, k:k+2], targ[:, :, k:k+2]) *  confidence_mask) * mask)/torch.sum(mask))
                 k += 2
+                # obstacle_losses.append(loss_list[-1].item())
+                # print('size', loss_list[-1].item())
 
-            # if 'collision' in self.output_args:
-            # physics constraints?
-
-        # for i, j in zip(['confidence', 'contact', 'movable', 'pose', 'yaw', 'size', 'confidence', 'contact', 'movable', 'pose', 'yaw', 'size'], loss_list):
-        #     print(i, j.item())
-        # print('---')
-
+            # print(np.sum(obstacle_losses)) 
+        # print(0.4torch.norm(poses[0][:, :, :2] - poses[1][:, :, :2], dim=-1) * mask.squeeze(0))
+        # loss_list.append(torch.sum(5 * torch.relu(0.16 - torch.square(poses[0][:, :, :2] - poses[1][:, :, :2],)) * mask)/torch.sum(mask))
+        # loss_list.append(torch.sum(5 * torch.relu(0.16 - torch.square(poses[0][:, :, 1:2] - poses[1][:, :, 1:2]))* mask)/torch.sum(mask))
+            
         return loss_list
-        # contact_loss1 = self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
-        # movable_loss1 = self.movable_loss(out[:, :, k+1:k+2], targ[:, :, k+1:k+2])
-        # pos_loss1 = self.pos_loss(out[:, :, k+2:k+4], targ[:, :, k+2:k+4])
-        # yaw_loss1 = self.yaw_loss(out[:, :, k+4:k+5], targ[:, :, k+4:k+5])
-        # size_loss1 = self.size_loss(out[:, :, k+5:k+7], targ[:, :, k+5:k+7])
-        # loss1 = contact_loss1 + movable_loss1 + pos_loss1 + yaw_loss1 + size_loss1
-
-        # k += self.output_size
-        # # object 2
-        # contact_loss2 = self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1])
-        # movable_loss2 = self.movable_loss(out[:, :, k+1:k+2], targ[:, :, k+1:k+2])
-        # pos_loss2 = self.pos_loss(out[:, :, k+2:k+4], targ[:, :, k+2:k+4])
-        # yaw_loss2 = self.yaw_loss(out[:, :, k+4:k+5], targ[:, :, k+4:k+5])
-        # size_loss2 = self.size_loss(out[:, :, k+5:k+7], targ[:, :, k+5:k+7])
-        # loss2 = contact_loss2 + movable_loss2 + pos_loss2 + yaw_loss2 + size_loss2
-        # return loss1, loss2
-
+        
     def train(self):
         ctr = 0
         for epoch in range(self.train_params.epochs):
@@ -245,7 +252,9 @@ class TransformerModel:
         if type(test_data_source) == list:
             for i in range(len(test_data_source)):
                 with open(test_data_source[i], 'rb') as file:
-                    test_datafiles += pickle.load(file)
+                    tmp_datafiles = pickle.load(file)
+                    random.shuffle(tmp_datafiles)
+                    test_datafiles += tmp_datafiles[:30]
         else:
             with open(test_data_source, 'rb') as file:
                 test_datafiles += pickle.load(file)
@@ -272,6 +281,10 @@ class TransformerModel:
                 'movable': [],
                 'static': []
                 },
+            'iou': {
+                'movable': [],
+                'static': []
+            }
         }
 
         record_final_loss = {
@@ -291,16 +304,28 @@ class TransformerModel:
                 'movable': [],
                 'static': []
                 },
+            'iou': {
+                'movable': [],
+                'static': []
+            }
         }
 
         self.model.eval()
         with torch.no_grad():
             progress_bar = tqdm(total=len(test_dataset))
             for i, (inp, targ, mask, fsw, pose, gt_target) in enumerate(test_loader):
+                
                 inp, targ, mask = inp.to(self.device), targ.to(self.device), mask.to(self.device)
                 
                 done_idx = (~mask[0]).nonzero()[0][0]
                 out = self.model(inp, src_mask = self.src_mask)
+                
+                out *= self.targ_scale
+                targ *= self.targ_scale
+
+                out_iou = out.clone().cpu().numpy()
+                targ_iou = targ.clone().cpu().numpy()
+
                 k = 0
                 gt_k = 0
                 for obs_idx in range(self.num_obstacles):
@@ -338,8 +363,8 @@ class TransformerModel:
                         k += 1 # self.output_args['movable']
                     
                     if 'pose' in self.output_args:
-                        out[:, :, k:k+3] = out[:, :, k:k+3] * self.targ_scale[2:5]
-                        targ[:, :, k:k+3] = targ[:, :, k:k+3] * self.targ_scale[2:5]
+                        out[:, :, k:k+3] = out[:, :, k:k+3] # * self.targ_scale[2:5]
+                        targ[:, :, k:k+3] = targ[:, :, k:k+3] # * self.targ_scale[2:5]
                         pos_loss = torch.abs(out[:, :, k:k+3] - targ[:, :, k:k+3])
 
                         # print(torch.sum(pos_loss[0, first_contact:done_idx, :], dim=0), (pos_loss[0, first_contact:done_idx, :]).shape, (done_idx-first_contact), pos_loss[0, done_idx, :].cpu().numpy())
@@ -353,13 +378,22 @@ class TransformerModel:
                         k += 3 # self.output_args['pose']
                     
                     if 'size' in self.output_args:
-                        out[:, :, k:k+2] = out[:, :, k:k+2] * self.targ_scale[5:7]
-                        targ[:, :, k:k+2] = targ[:, :, k:k+2] * self.targ_scale[5:7]
+                        out[:, :, k:k+2] = out[:, :, k:k+2] # * self.targ_scale[5:7]
+                        targ[:, :, k:k+2] = targ[:, :, k:k+2] # * self.targ_scale[5:7]
                         # size_loss = F.mse_loss(out[:, :, k:k+2], targ[:, :, k:k+2], reduction='none')
                         size_loss = torch.abs(out[:, :, k:k+2] - targ[:, :, k:k+2])
                         record_seq_loss['size'][sub_key].append((torch.sum(size_loss[0, first_contact:done_idx, :], dim=0)/(done_idx-first_contact)).cpu().numpy())
                         record_final_loss['size'][sub_key].append(size_loss[0, done_idx-1, :].cpu().numpy())
                         k += 2 # self.output_args['size']
+
+                    
+                    intersection_seq, union_seq = get_bbox_intersections(targ_iou[:, first_contact:done_idx, k-5:k], out_iou[:, first_contact:done_idx, k-5:k])
+
+                    record_seq_loss['iou'][sub_key].append(np.mean(intersection_seq/union_seq))
+
+                    intersection_final, union_final = get_bbox_intersections(targ_iou[:, done_idx-1:done_idx, k-5:k], out_iou[:, done_idx-1:done_idx, k-5:k])
+
+                    record_final_loss['iou'][sub_key].append(np.mean(intersection_final/union_final))
 
                     gt_k += 9
 
@@ -382,32 +416,118 @@ class TransformerModel:
     
     def test_real(self, data_source, log_folder):
         datafiles = data_source
-        # if type(data_source) == list:
-        #     for i in range(len(data_source)):
-        #         with open(data_source[i], 'rb') as file:
-        #             datafiles += pickle.load(file)
-        # else:
-        #     with open(data_source, 'rb') as file:
-        #         datafiles += pickle.load(file)
-
+        
+        record_final_loss = {
+            'contact': {
+                'movable': [],
+                'static': []
+                },
+            'movable': {
+                'movable': [],
+                'static': []
+                },
+            'pose': {
+                'movable': [],
+                'static': []
+                },
+            'size': {
+                'movable': [],
+                'static': []
+                },
+            'iou': {
+                'movable': [],
+                'static': []
+            }
+        }
+        
         # initialize the datasets
         real_dataset = RealTransformerDataset(self.data_params, datafiles, sequence_length=self.model_params.sequence_length)
         dataloader = DataLoader(real_dataset, batch_size=1, shuffle=False)
 
         self.model.eval()
         with torch.no_grad():
-            for i, (inp, targ, mask, pose) in enumerate(dataloader):
+            for i, (inp, targ, mask, pose) in tqdm(enumerate(dataloader)):
                 inp, targ, mask = inp.to(self.device), targ.to(self.device), mask.to(self.device)
                 out = self.model(inp, src_mask = self.src_mask)
 
-                print('saving animations')
+                done_idx = (mask[0]).nonzero()[-1][0]
+                
+
+                out *= self.targ_scale
+
                 if self.logging.animation:
+                    print('saving animations')
                     pose = pose.to(self.device)
                     pose *= self.pose_scale
-                    out *= self.targ_scale
                     self.save_real_animation(pose, targ, out, mask, log_folder)
+
+                # add metrics here to measure performance
+                k = 0
+                targ_k = 0
+                start_k = 3
+                start_targ_k = 0
+                for sub_key in ['movable', 'static']:
                     
-        return None
+                    confidence = 1.
+                    # start_k += 3
+                    if 'confidence' in self.output_args:
+                        confidence = 1.0 # torch.sigmoid(out[0, done_idx-1, k:k+1]).item()
+                        k += 1
+
+                    if 'contact' in self.output_args:
+                        k += 1
+
+                    if 'movable' in self.output_args:
+                        k += 1
+
+                    if 'pose' in self.output_args:
+                        # out[:, :, k:k+3] = out[:, :, k:k+3] * self.targ_scale[2:5]
+                        if confidence > 0.4:
+                            pos_loss = torch.abs(out[:, :, k:k+3] - targ[:, :, targ_k:targ_k+3])
+                            record_final_loss['pose'][sub_key].append(pos_loss[0, done_idx-2, :].cpu().numpy())
+                        
+                            # print('pose', out[:, done_idx-2, k:k+3], targ[:, done_idx-2, targ_k:targ_k+3], sub_key, record_final_loss['pose'][sub_key][-1])
+
+                        k += 3
+                        targ_k += 3
+                    
+                    if 'size' in self.output_args:
+                        # out[:, :, k:k+2] = out[:, :, k:k+2] * self.targ_scale[5:7]
+                        if confidence > 0.5:
+                            size_loss = torch.abs(out[:, :, k:k+2] - targ[:, :, targ_k:targ_k+2])
+                            
+                            record_final_loss['size'][sub_key].append(size_loss[0, done_idx-2, :].cpu().numpy())
+
+                            # print('size', out[:, done_idx-2, k:k+2], targ[:, done_idx-2, targ_k:targ_k+2], sub_key, record_final_loss['size'][sub_key][-1])
+                            
+                        k += 2 # self.output_args['size']
+                        targ_k += 2
+
+                    out_iou = out.clone().cpu().numpy()
+                    targ_iou = targ.clone().cpu().numpy()
+                    
+                    if targ[0, 2, start_targ_k] > 0. and confidence > 0.4:
+                        intersection, union = get_bbox_intersections(targ_iou[:, done_idx-2:done_idx-1, start_targ_k:start_targ_k+targ_k], out_iou[:, done_idx-2:done_idx-1, start_k:start_k+5])
+                        record_final_loss['iou'][sub_key].append((intersection[0, :]/union[0, :]))
+
+                    start_k += 8
+                    start_targ_k += targ_k
+
+                
+                    
+        # get means
+        for key in list(record_final_loss.keys()):
+            for sub_key in ['movable', 'static']:
+                if len(record_final_loss[key][sub_key]) > 0:
+                    # print(np.concatenate(record_final_loss[key][sub_key]))
+                    plt.hist(np.histogram(np.concatenate(record_final_loss[key][sub_key])), bins='auto')
+                    plt.savefig(f'test_{key}_{sub_key}.png')
+
+                    record_final_loss[key][sub_key] = np.mean(record_final_loss[key][sub_key], axis=0).tolist()
+                else:
+                    del record_final_loss[key][sub_key]
+
+        return {'final_loss': record_final_loss}
                     
     def save_real_animation(self, pose, targ, out, mask, log_folder):
         # save animations
@@ -419,14 +539,13 @@ class TransformerModel:
             mask = mask.to('cpu')
             
             if mask[0, step, 0]:
-                
                 patch_set = get_real_visualization(self.num_obstacles, pose[0, step, :], targ[0, step, :], out[0, step, :])
                 patches.append(patch_set)
             else:
                 break
 
         fig, ax = plt.subplots(1, 1, figsize=(19.2, 10.8), dpi=100)
-        ax.axis('off')
+        # ax.axis('off')
         ax.set(xlim=(-1.0, 4.0), ylim=(-1, 1), aspect='auto')
         last_patch = []
 

@@ -46,11 +46,10 @@ if __name__ == "__main__":
         # '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-15/navigator_train/050321.571692', 
         # '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-17/navigator_train/012555.571562', 
         # '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-18/navigator_train/035410.215673',
-        '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-19/navigator_train/055837.269443',
+        # '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-19/navigator_train/055837.269443',
         # '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-21/navigator_train/222237.780837',
-        
     ]
-    # recent_runs = ['/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-19/navigator_train/064525.312710']
+    recent_runs = ['/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/runs/high_level_policy/2024-02-19/navigator_train/064525.312710']
 
 
     # with open(model_path + "/parameters.pkl", 'rb') as file:
@@ -94,23 +93,7 @@ if __name__ == "__main__":
             patches = []
             with torch.no_grad():
                 actions = policy(obs['obs_history'], obs['privileged_obs'])
-                # actions = actions.clone()
-                # # print(actions)
-                
-                # if idx > 0:
-                #     actions[:, :] = 0.0
-                #     actions[:, 2] = -1.
-                #     print('turn')
-                # # if idx > 100:
-                # #     actions[:, :] = 0.0
-                # if idx > 100:
-                #     actions[:, :] = 0.0
-                #     actions[:, 0] = 1.0
-                #     print('left')
                 obs, _, done, _ = env.step(actions)
-
-                # print(env.legged_env.base_lin_vel[0, :2])
-                # print(env.legged_env.root_states[0, 7])
                 env_ids = done.nonzero(as_tuple=True)[0]
                 if len(env_ids) > 0:
                     obs['obs_history'][env_ids] = 0.

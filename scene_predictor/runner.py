@@ -36,14 +36,14 @@ class Runner:
             os.makedirs(log_folder)
 
         recorded_loss = self.model.test_real(test_data_source, log_folder)
-        # data = {
-        #     'inputs': inputs,
-        #     'outputs': outputs,
-        #     'ckpt': ckpt,
-        #     'recorded_loss': recorded_loss
-        # }
-        # with open(f'{log_folder}/{results_json}', 'w') as f:
-        #     json.dump(data, f)
+        data = {
+            'inputs': inputs,
+            'outputs': outputs,
+            'ckpt': ckpt,
+            'recorded_loss': recorded_loss
+        }
+        with open(f'{log_folder}/{results_json}', 'w') as f:
+            json.dump(data, f)
 
 if __name__ == '__main__':
     import argparse
@@ -167,6 +167,7 @@ if __name__ == '__main__':
             new_output_params[o] = output_params[o]
         train_cfg.data_params.inputs = new_input_params
         train_cfg.data_params.outputs = new_output_params
+        train_cfg.logging.animation = args.animation
 
         runner = Runner(train_cfg, model_name, None, save_folder, 'cuda:0')
         ckpt_file = os.path.join(save_folder, runs.real_test.ckpt)
@@ -179,10 +180,7 @@ if __name__ == '__main__':
             'ckpt': runs.real_test.ckpt 
         }
 
-        runner.test_real(files, f'{real_experiment_folder}', f'{runs.test.experiment_name}.json', **test_args)
-        
-
-        
+        runner.test_real(files, f'{real_experiment_folder}/{runs.real_test.log_folder}', f'{runs.real_test.experiment_name}.json', **test_args)
 
     # filename = 'losses_1.json'
     # runner.test(test_data_source, inputs, outputs, filename)

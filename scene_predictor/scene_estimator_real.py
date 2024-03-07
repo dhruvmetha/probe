@@ -10,7 +10,6 @@ import torch
 import os
 from evaluate_iou import get_bbox_intersections_func
 
-
 FFwriter = animation.FFMpegWriter
 
 # HOME_DIR = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor/results_2_obs_se/2023-09-04_10-38-36'

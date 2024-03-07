@@ -8,8 +8,8 @@ import pickle
 import multiprocessing as mp
 from matplotlib import pyplot as plt
 
-iou_input_dir_path = "/common/users/dm1487/legged_manipulation_data_store/evaluation_data2/"
-iou_output_dir_path = "/common/users/dm1487/legged_manipulation_data_store/evaluation_data_iou2"
+# iou_input_dir_path = "/common/users/dm1487/legged_manipulation_data_store/evaluation_data2/"
+# iou_output_dir_path = "/common/users/dm1487/legged_manipulation_data_store/evaluation_data_iou2"
 # iou_input_dir_path = "/common/home/dm1487/Downloads/sep14"
 # iou_output_dir_paths = "/common/home/dm1487/Downloads/real_iou "
 
@@ -33,7 +33,7 @@ def rectangle_vertices(raw_vals):
     ])
 
 def rect_coords_all(bboxes_row):
-    return np.vstack([bboxes_row[:5],bboxes_row[5:10]])
+    return np.vstack([bboxes_row[:5]])
 
 def get_bbox_coords(bboxes):
     return np.apply_along_axis(rect_coords_all, axis=2, arr=bboxes)
@@ -54,11 +54,12 @@ def get_bbox_intersections(gt_bboxes, pred_bboxes):
     ))
 
     intersection_areas = np.array(list(map(lambda polygon_int : polygon_int.area, intersection_results)))
+    # print('here', intersection_areas)
     gt_areas = np.array(list(map(lambda polygon_int : polygon_int.area, gt_polygons)))
     pred_areas = np.array(list(map(lambda polygon_int : polygon_int.area, pred_polygons)))
     union_areas = gt_areas + pred_areas - intersection_areas
-    intersection_areas = intersection_areas.reshape((B,N,R))
-    union_areas = union_areas.reshape((B,N,R))
+    intersection_areas = intersection_areas.reshape((B,N))
+    union_areas = union_areas.reshape((B,N))
     return intersection_areas, union_areas
 
 def get_bbox_intersections_by_files(curr_box_files,dummy_arg=None):

@@ -33,12 +33,14 @@ class TransformerDataset(Dataset):
         joint_vel = inp[:, 15:27]
         torques = inp[:, 27:39] * 0.08 # scale torques
         pose = torch.tensor(data['target'])[:, :3]
+        velocity = torch.tensor(data['target'])[:, 3:5]
         inputs = {
             'projected_gravity': projected_gravity,
             'joint_pos': joint_pos,
             'joint_vel': joint_vel,
             'torques': torques, # scale torques,
-            'pose': pose
+            'pose': pose,
+            'velocity': velocity
         }
 
         inputs = [inputs[k] for k in self.input_dict.keys()]
@@ -115,6 +117,7 @@ class RealTransformerDataset(Dataset):
     def __getitem__(self, idx):
         data = np.load(self.all_files[idx], allow_pickle=True)
 
+        print(list(data.keys()))
         done_idx = data['done'].nonzero()[0][-1]
         start = 0
         end = done_idx
@@ -127,13 +130,15 @@ class RealTransformerDataset(Dataset):
         joint_vel = inp[:, 15:27] * 0.05
         torques = inp[:, 27:39] * 0.08
         pose = (torch.from_numpy(data['target'][start:end]) * torch.tensor([0.25, 1, 1/3.14]))
+        # velocity = torch.from_numpy(data['body_vel'][start:end])
 
         inputs = {
             # 'projected_gravity': projected_gravity,
             'joint_pos': joint_pos,
             'joint_vel': joint_vel,
             'torques': torques,
-            'pose': pose
+            'pose': pose,
+            # 'velocity': velocity
         }
 
         inputs = [inputs[k] for k in self.input_dict.keys()]
@@ -142,7 +147,21 @@ class RealTransformerDataset(Dataset):
         inputs = torch.cat([inputs, torch.zeros(1500 - (end-start), inputs.shape[1])], dim=0) # padding
     
         m_obstacle_data = data['obstacles'][0]
+        m_obstacle_data_copy = m_obstacle_data.clone()
+        # m_obstacle_data_3 = m_obstacle_data_copy[:, 3]
+        # m_obstacle_data_4 = m_obstacle_data_copy[:, 4]
+
+        m_obstacle_data[:, 3] = m_obstacle_data_copy[:, 4]
+        m_obstacle_data[:, 4] = m_obstacle_data_copy[:, 3]
+
         im_obstacle_data = data['obstacles'][2]
+        im_obstacle_data_copy = im_obstacle_data.clone()
+        # im_obstacle_data_3 = im_obstacle_data_copy[:, 3]
+        # im_obstacle_data_4 = im_obstacle_data_copy[:, 4]
+        im_obstacle_data[:, 3] = im_obstacle_data_copy[:, 4]
+        im_obstacle_data[:, 4] = im_obstacle_data_copy[:, 3]
+        
+        
         
         target = torch.from_numpy(np.concatenate([m_obstacle_data, im_obstacle_data], axis=1))
 
@@ -150,6 +169,43 @@ class RealTransformerDataset(Dataset):
         mask[:end, :] = True
         
         return inputs, target, mask, pose
+    
+    def calculate_box_corners(x, y, theta, w, h):
+        """
+        Calculate the bottom-left and top-right corners of a 2D box given its center,
+        width, height, and rotation angle.
+        
+        Parameters:
+        - x, y: Coordinates of the box's center.
+        - theta: Rotation angle of the box in radians.
+        - w, h: Width and height of the box.
+        
+        Returns:
+        - (bl_x, bl_y, tr_x, tr_y): Coordinates of the bottom-left and top-right corners.
+        """
+        def rotate_point(px, py, theta):
+            """Rotate a point by theta around the origin."""
+            cos_theta, sin_theta = np.cos(theta), np.sin(theta)
+            x_rotated = px * cos_theta - py * sin_theta
+            y_rotated = px * sin_theta + py * cos_theta
+            return x_rotated, y_rotated
+
+        # Half dimensions
+        half_w, half_h = w / 2, h / 2
+        
+        # Calculate offsets for corners in local box coordinates
+        offsets = [(-half_w, -half_h), (half_w, half_h)]
+        
+        # Rotate offsets and translate to world coordinates
+        corners = [rotate_point(ox, oy, theta) for ox, oy in offsets]
+        corners_world = [(x + cx, y + cy) for cx, cy in corners]
+        
+        # Bottom-left and top-right corners
+        bl_x, bl_y = corners_world[0]
+        tr_x, tr_y = corners_world[1]
+        
+        return bl_x, bl_y, tr_x, tr_y
+
     
 
 class VelocityTransformerDataset(Dataset):

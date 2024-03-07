@@ -40,13 +40,16 @@ def get_real_visualization(obstacle_count,
             facecolor = 'yellow'
         else:
             facecolor = 'red'
-        patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor=facecolor))
 
+        if obs_pos[0] > 0.1:
+            patches.append(pch.Rectangle(obs_pos - obs_size/2, *(obs_size), angle=obs_rot, rotation_point='center', facecolor=facecolor))
+        else:
+            patches.append(pch.Rectangle(obs_pos - obs_size/2, *([0., 0.]), angle=obs_rot, rotation_point='center', facecolor=facecolor))
         k += 5
     
     k = 3
     for i in range(obstacle_count):
-        confidence = (torch.sigmoid(pred_obstacle_params[k-3]).item() > 0.0) * 1.
+        confidence = 1 if (torch.sigmoid(pred_obstacle_params[k-3]).item() > 0.4) else 0.5
         contact = torch.sigmoid(pred_obstacle_params[k-2])
         movable = torch.sigmoid(pred_obstacle_params[k-1])
         obs_pos = np.array(pred_obstacle_params[k:k+2])
@@ -62,7 +65,6 @@ def get_real_visualization(obstacle_count,
         k += 8
     
     return patches
-
 
 def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=False):
 
