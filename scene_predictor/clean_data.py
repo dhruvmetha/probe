@@ -25,6 +25,7 @@ def remove_files(files, here):
             if data['target'][10, 0] == 0. and data['target'][10, 1] == 0.:
                 print('pose error', file)
                 os.remove(file)
+
             data['done']
             data['target_env']
             data['target']

@@ -46,7 +46,7 @@ def class_to_dict(obj) -> dict:
 class RunnerArgs(PrefixProto, cli=False):
     # runner
     algorithm_class_name = 'RMA'
-    num_steps_per_env = 15  # per iteration
+    num_steps_per_env = 25  # per iteration
     max_iterations = 1500  # number of policy updates
 
     # logging

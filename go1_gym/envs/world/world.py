@@ -328,7 +328,6 @@ class WorldAsset():
             self.last_obs[env_ids, :,] = 0.
 
         for env_id in env_ids:
-            # print(env_id)
             env_id = env_id.item()
             if env_id < self.num_train_envs:
                 self.full_info_bool[env_id] = np.random.uniform() < self.full_info_prob

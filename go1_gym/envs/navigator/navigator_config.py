@@ -276,13 +276,13 @@ class Cfg(PrefixProto, cli=False):
 
     class reward_scales(ParamsProto, cli=False):
 
-        terminal_time_out = -1.0 # -5.0
-        terminal_distance_gs = 10.0
+        # terminal_time_out = -1.0 # -5.0
+        # terminal_distance_gs = 10.0
        
-        distance = -0.03 # -1e-3
-        time = -0.01
-        side_limits = -0.05
-        heading = -0.05
+        distance = -0.1 # -1e-3
+        # time = -0.01
+        # side_limits = -0.05
+        # heading = -0.05
         
     class normalization(PrefixProto, cli=False):
         clip_observations = 100.

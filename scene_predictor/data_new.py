@@ -54,19 +54,36 @@ class TransformerDataset(Dataset):
         target = torch.tensor(data['target_env'])
         fsw = torch.tensor(data['fsw'])
         final_target = torch.zeros((self.sequence_length, int(self.obstacles * self.output_size)))
+        # final_target_contact_mask = torch.zeros((self.sequence_length, int(self.obstacles * self.output_size)))
         final_fsw = torch.zeros((self.sequence_length, int(self.obstacles * self.output_size)))
         
         k = 0
-        fsw_k = 0 
+        fsw_k = 0
+
+        contact_end_idx = 0 
+        for obs_idx in range(self.obstacles):
+            true_k = (9 * obs_idx)
+            contact_points = target[:, true_k + 0].nonzero()
+            if len(contact_points) > 0:
+                if contact_points[-1][0] > contact_end_idx:
+                    contact_end_idx = contact_points[-1][0]
+
         for obs_idx in range(self.obstacles):
             true_k = (9 * obs_idx) # skip the last 2 elements (data contains: mass and friction that we do not consider in the model)
+
+            contact_start_idx, contact_idx = 0, None
+            contact_points = target[:, true_k + 0].nonzero()
+            if len(contact_points) > 0:
+                contact_idx = contact_points[0][0]
+                contact_start_idx = contact_points[0][0]
+                # contact_end_idx = contact_points[-1][0]
+
+            # print(obs_idx, contact_start_idx, contact_end_idx, done_idx)
+            
             if 'confidence' in self.output_dict:
-                contact_points = target[:, true_k + 0].nonzero()
-                if len(contact_points) > 0:
-                    contact_idx = contact_points[-1][0]
-                    # print(obs_idx, contact_idx, done_idx)
-                    final_target[contact_idx:, k] = 1.
-                    final_fsw[contact_idx:, k] = 1.
+                if contact_idx is not None:
+                    final_target[contact_start_idx:contact_end_idx, k] = 1.
+                    final_fsw[contact_start_idx:contact_end_idx, k] = 1.
                 k += self.output_dict['confidence']
                 
             if 'contact' in self.output_dict:
@@ -115,9 +132,8 @@ class RealTransformerDataset(Dataset):
         return int((len(self.all_files)))
 
     def __getitem__(self, idx):
+        print(self.all_files[idx])
         data = np.load(self.all_files[idx], allow_pickle=True)
-
-        print(list(data.keys()))
         done_idx = data['done'].nonzero()[0][-1]
         start = 0
         end = done_idx
@@ -160,8 +176,8 @@ class RealTransformerDataset(Dataset):
         # im_obstacle_data_4 = im_obstacle_data_copy[:, 4]
         im_obstacle_data[:, 3] = im_obstacle_data_copy[:, 4]
         im_obstacle_data[:, 4] = im_obstacle_data_copy[:, 3]
-        
-        
+
+        print(m_obstacle_data[10, :2], im_obstacle_data[10, :2])
         
         target = torch.from_numpy(np.concatenate([m_obstacle_data, im_obstacle_data], axis=1))
 
@@ -266,7 +282,7 @@ if __name__ == '__main__':
 
     # data_files = [sorted(glob(f'/common/home/dm1487/Downloads/sep15/2/*.npz'))[-1]]
 
-    with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:
+    with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb21/2_obs/balanced/train_1.pkl', 'rb') as f:
         files = pickle.load(f)
 
     random.shuffle(files)

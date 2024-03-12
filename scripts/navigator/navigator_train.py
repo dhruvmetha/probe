@@ -15,15 +15,15 @@ if __name__ == "__main__":
     logger.configure(logger.utcnow(f'high_level_policy/%Y-%m-%d/{stem}/%H%M%S.%f'),
                      root=Path(f"{MINI_GYM_ROOT_DIR}/runs").resolve(), )
 
-    SEED = 100
+    SEED = 45
     np.random.seed(SEED)
     torch.manual_seed(SEED)
     random.seed(SEED)
-    Cfg.env.num_envs = 3000
+    Cfg.env.num_envs = 2048
     Cfg.env.max_episode_length = 1499
     Cfg.env.num_observation_history = 750
     Cfg.env.num_observations = 8
-    obs = "2_obs"
+    obs = "3_obs"
     save_data = False
     headless = True
 

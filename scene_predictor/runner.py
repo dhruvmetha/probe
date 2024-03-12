@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', type=str, default='train', help='train, sim_test, real_test')
-    parser.add_argument('--animation', type=bool, default=False, help='do animation or not.')
+    parser.add_argument('--animate', action='store_true', help='do animate or not.')
 
     args = parser.parse_args()
 
@@ -67,9 +67,9 @@ if __name__ == '__main__':
     device = runs.device
     save_root = runs.save_root
     log_folder = runs.log_folder
-    experiments_folder = runs.experiments_folder
+    cfg_experiments_folder = runs.experiments_folder
     save_folder = f'{save_root}/{log_folder}/{model_name}'
-    experiments_folder = f'{save_root}/{experiments_folder}/{model_name}'
+    experiments_folder = f'{save_root}/{cfg_experiments_folder}/{model_name}'
     real_experiment_folder = f'{save_root}/{runs.real_experiments_folder}/{model_name}'
 
     shorts = {
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
         train_cfg.data_params.inputs = new_input_params
         train_cfg.data_params.outputs = new_output_params
-        train_cfg.logging.animation = args.animation
+        train_cfg.logging.animation = args.animate
         # train_cfg.train_params.epochs = 10
 
         if not os.path.exists(save_folder):
@@ -167,7 +167,7 @@ if __name__ == '__main__':
             new_output_params[o] = output_params[o]
         train_cfg.data_params.inputs = new_input_params
         train_cfg.data_params.outputs = new_output_params
-        train_cfg.logging.animation = args.animation
+        train_cfg.logging.animation = args.animate
 
         runner = Runner(train_cfg, model_name, None, save_folder, 'cuda:0')
         ckpt_file = os.path.join(save_folder, runs.real_test.ckpt)

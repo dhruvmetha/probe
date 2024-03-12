@@ -49,7 +49,8 @@ def get_real_visualization(obstacle_count,
     
     k = 3
     for i in range(obstacle_count):
-        confidence = 1 if (torch.sigmoid(pred_obstacle_params[k-3]).item() > 0.4) else 0.5
+        # conf_threshold = 0.8 if i == 0 else 0.75
+        confidence = torch.sigmoid(pred_obstacle_params[k-3]).item()
         contact = torch.sigmoid(pred_obstacle_params[k-2])
         movable = torch.sigmoid(pred_obstacle_params[k-1])
         obs_pos = np.array(pred_obstacle_params[k:k+2])
@@ -66,7 +67,7 @@ def get_real_visualization(obstacle_count,
     
     return patches
 
-def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=False):
+def get_visualization(args, args_size, num_obstacles, idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=False):
 
     obs = obs.cpu()
     pred_obs = pred_obs.cpu()
@@ -89,14 +90,32 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
     # print(estimate_pose)
         
     if not estimate_pose:
-        for i in range(RECTS):
-            j = i*8 + 3
-            fsw_j = i*8 + 3
+        for i in range(num_obstacles):
+            j = i*(args_size)
+            fsw_j = i*(args_size)
             
-            confidence = torch.sigmoid(pred[idx][j-3]).item()
-            contact = torch.sigmoid(pred[idx][j-2])
+            confidence = 1.
+            movable = 0.
+            block_color = 'red'
+            block_color_fsw = 'red'
+            if 'confidence' in args: 
+                confidence = torch.sigmoid(pred[idx][j]).item()
+                j += 1
+                fsw_j += 1
+            if 'contact' in args:
+                contact = torch.sigmoid(pred[idx][j])
+                j += 1
+                fsw_j += 1
             # alpha = 0.3 if contact.item() < 0.5 else 0.8
-            movable = torch.sigmoid(pred[idx][j-1])
+            if 'movable' in args:
+                movable = torch.sigmoid(pred[idx][j])
+                j += 1
+                fsw_j += 1
+            else:
+                if i == 0:
+                    movable = 1.
+                    block_color = 'yellow'
+                    block_color_fsw = 'yellow'
 
             pos, pos_pred, pos_fsw = priv_obs[idx][j:j+2], pred[idx][j:j+2], fsw[idx][fsw_j:fsw_j+2]
 
@@ -107,13 +126,12 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
             pos, pos_pred, pos_fsw = pos.numpy(), pos_pred.numpy(), pos_fsw.numpy()
             size, size_pred, size_fsw = size.numpy(), size_pred.numpy(), size_fsw.numpy()
 
-            block_color = 'red'
-            if priv_obs[idx][j-1] == 1:
-                block_color = 'yellow'
+            
+            # if priv_obs[idx][j-1] == 1:
+            #     block_color = 'yellow'
 
-            block_color_fsw = 'red'
-            if fsw[idx][fsw_j-1] == 1:
-                block_color_fsw = 'yellow'
+            # if fsw[idx][fsw_j-1] == 1:
+            #     block_color_fsw = 'yellow'
             
             pred_block_color = 'blue'
             if movable > 0.5:
@@ -128,7 +146,6 @@ def get_visualization(idx, obs, priv_obs, pred_obs, pred, fsw, estimate_pose=Fal
                     patch_set.append(pch.Rectangle(pos_pred - size_pred/2, *([0., 0.]), angle=angle_pred, rotation_point='center', facecolor=pred_block_color,  label=f'pred_mov_{i}'))
                 
                 patch_set.append(pch.Rectangle(pos_fsw - size_fsw/2, *(size_fsw), angle=angle_fsw, rotation_point='center', facecolor=block_color_fsw, label=f'fsw_mov_{i}'))
-                
 
     return patch_set
 

@@ -411,7 +411,7 @@ class Navigator(BaseTask):
         vel = torch.cat([vel_x, vel_y], dim=-1)
 
         vel = vel.view(-1, 2)
-        print(vel[0], self.legged_env.base_lin_vel[0, :2], vel[0] - self.legged_env.base_lin_vel[0, :2])
+        # print(vel[0], self.legged_env.base_lin_vel[0, :2], vel[0] - self.legged_env.base_lin_vel[0, :2])
 
         if self.use_localization_model:
             # print()
@@ -447,7 +447,7 @@ class Navigator(BaseTask):
             # obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), self.base_yaw, vel, self.actions.clone()], dim = -1)
             # scaling_vec = torch.tensor([0.25, 1, 1/3.14]  + [1/0.4, 1/0.4] + [1/0.4, 1/0.4, 1/0.4], device=self.device)
 
-            obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), self.base_yaw, vel, self.actions.clone()], dim = -1)
+            obs = torch.cat([((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), self.base_yaw, self.legged_env.base_lin_vel[:, :2], self.actions.clone()], dim = -1)
             scaling_vec = torch.tensor([0.25, 1, 1/3.14] + [1/0.4, 1/0.4] + [1/0.4, 1/0.4, 1/0.4], device=self.device)
 
             # obs = torch.cat([joint_pos, torques, ((self.legged_env.base_pos[:, :1] - self.env_origins[:, :1])), (self.legged_env.base_pos[:, 1:2] - self.env_origins[:, 1:2]), self.base_yaw, self.actions.clone()], dim = -1)
