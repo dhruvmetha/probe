@@ -15,7 +15,7 @@ from go1_gym.envs.navigator.navigator_config import Cfg
 from go1_gym.envs.base.legged_robot import LeggedRobot
 from go1_gym.envs.base.legged_robot_config import Cfg as LeggedCfg
 
-from go1_gym.envs.world.world import WorldAsset
+from go1_gym.envs.world.new_world import WorldAsset
 
 
 from go1_gym.envs.go1.go1_config import config_go1
@@ -125,6 +125,7 @@ class Navigator(BaseTask):
     
     def _create_envs(self):
         self._pre_create_env()
+        chosen_asset = np.random.randint(0, 3, size=self.num_envs)
         for i in range(self.num_envs):
             env_lower = gymapi.Vec3(0., 0., 0.)
             env_upper = gymapi.Vec3(0., 0., 0.)
@@ -132,7 +133,7 @@ class Navigator(BaseTask):
             pos = self.env_origins[i]
 
             self.legged_env.create_actor(i, env_handle, pos)
-            self.world_env.create_actor(i, env_handle, pos)
+            self.world_env.create_actor(i, chosen_asset[i], env_handle, pos)
 
             self.envs.append(env_handle)
 
@@ -581,10 +582,10 @@ class Navigator(BaseTask):
             return
         
         train_env_ids = env_ids[env_ids < self.num_train_envs]
-        for env_id in train_env_ids:
+        # for env_id in train_env_ids:
             # print(env_id, self.world_env.inplay[env_id.item()])
-            self.world_env.world_types_success[self.world_env.inplay[env_id.item()].item()] += self.gs_buf[env_id.item()] * 1
-            self.world_env.world_types_count[self.world_env.inplay[env_id.item()].item()] += 1
+            # self.world_env.world_types_success[self.world_env.inplay[env_id.item()].item()] += self.gs_buf[env_id.item()] * 1
+            # self.world_env.world_types_count[self.world_env.inplay[env_id.item()].item()] += 1
 
         self.legged_env.reset_idx(env_ids)
         self.legged_env.compute_observations()

@@ -186,6 +186,37 @@ EVAL_INPLAY_ASSETS = [
 
 # EVAL_INPLAY_ASSETS = [*INPLAY_ASSETS]
 # INPLAY_ASSETS = [*EVAL_INPLAY_ASSETS]
+TASK_NEW_TEST = [
+    {   
+        'name': ['test_block'],
+        'size': [[round(0.4, 2), round(1.0334100513676105, 2), 0.4]],
+        'pos': [[round(0.4543991913594166, 2), round( -0.20539500811632277, 2), round(-0.29598843487818005, 2)]],
+        'nature': [0]
+    },
+
+    {
+        'name': ['test_block_1', 'test_block_2'],
+        'size': [[round(0.4, 2), round(0.8795643321095516, 2), 0.4], 
+                 [round(0.4, 2), round(0.7616942667538209, 2), 0.4]],
+        'pos': [[round(1.4400664360131243, 2), round(-0.18923821855100298, 2), round(0.02045870905496261, 2)], 
+                [round(0.9481168076121163, 2), round(-0.42161567877026024, 2), round(-0.18166220721782994, 2)]],
+        'nature': [1, 0]
+    },
+
+    {
+        'name': ['test_block_1', 'test_block_2', 'test_block_3'],
+        'size': [[round(0.4, 2), round(0.9922277290253856, 2), 0.4], 
+                 [round(0.4, 2), round(0.47560743748276446, 2), 0.4],
+                 [round(0.4, 2), round(0.4331948536065575, 2), 0.4]
+                 ],
+        'pos': [[round(1.771301104068193, 2), round(0.2520711062739779, 2), round(0.11963820425692695, 2)], 
+                [round(1.3202893797831656, 2), round(-0.4394484193178382, 2), round(-0.2229126072623131, 2)],
+                [round(0.2711884428275134, 2), round(0.6212283605097734, 2), round(0.2278196612938458, 2)]
+                ],
+        'nature': [0, 1, 0]
+    }
+]
+
 
 TASK_ONE = [
         {
@@ -444,12 +475,12 @@ TASK_6 = [
 ]
 
 # -0.58 + 0.72 + 0.35 =  
-# INPLAY_ASSETS = [*TASK_ONE]
-# EVAL_INPLAY_ASSETS = [*TASK_ONE]
+INPLAY_ASSETS = [*TASK_NEW_TEST]
+EVAL_INPLAY_ASSETS = [*TASK_NEW_TEST]
 # INPLAY_ASSETS = [*TASK_THREE]
 # EVAL_INPLAY_ASSETS = [*TASK_THREE]
-INPLAY_ASSETS = [*TASK_ONE, *TASK_TWO, *TASK_THREE]
-EVAL_INPLAY_ASSETS = [*TASK_ONE, *TASK_TWO, *TASK_THREE]
+# INPLAY_ASSETS = [*TASK_ONE, *TASK_TWO]
+# EVAL_INPLAY_ASSETS = [*TASK_ONE, *TASK_TWO]
 
 # INPLAY_ASSETS = [*RANDOM_INPLAY_ASSETS[1:2]]
 # EVAL_INPLAY_ASSETS = [*RANDOM_INPLAY_ASSETS[1:2]]

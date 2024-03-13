@@ -27,8 +27,8 @@ class RunCfg(PrefixProto):
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_2.pkl'
             ]
 
-            inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
-            outputs = ['confidence', 'pose', 'size']
+            inputs = ['torques', 'pose']
+            outputs = ['confidence', 'movable', 'pose', 'size']
             # inputs = ['joint_pos', 'joint_vel', 'torques']
             # outputs = ['velocity']
 

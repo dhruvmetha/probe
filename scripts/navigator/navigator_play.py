@@ -62,12 +62,12 @@ if __name__ == "__main__":
     #         if hasattr(Cfg, key):
     #             for key2, value2 in cfg[key].items():
     #                 setattr(getattr(Cfg, key), key2, value2)
-    SEED = 45
+    SEED = 100
     np.random.seed(SEED)
     torch.manual_seed(SEED)
     random.seed(SEED)
     
-    Cfg.env.num_envs = 3
+    Cfg.env.num_envs = 10
     Cfg.env.max_episode_length = 1499
     Cfg.env.num_observation_history = 750
     Cfg.env.num_observations = 8
