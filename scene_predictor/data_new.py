@@ -60,6 +60,8 @@ class TransformerDataset(Dataset):
         k = 0
         fsw_k = 0
 
+        # contact_end_idx = done_idx
+
         contact_end_idx = 0 
         for obs_idx in range(self.obstacles):
             true_k = (9 * obs_idx)
@@ -82,13 +84,13 @@ class TransformerDataset(Dataset):
             
             if 'confidence' in self.output_dict:
                 if contact_idx is not None:
-                    final_target[contact_start_idx:contact_end_idx, k] = 1.
-                    final_fsw[contact_start_idx:contact_end_idx, k] = 1.
+                    final_target[contact_start_idx:done_idx, k] = 1.
+                    final_fsw[contact_start_idx:done_idx, k] = 1.
                 k += self.output_dict['confidence']
                 
             if 'contact' in self.output_dict:
-                final_target[:, k] = target[:, true_k + 0]
-                final_fsw[:, k] = fsw[:, true_k + 0]
+                final_target[contact_start_idx:contact_end_idx, k] = 1. # target[:, true_k + 0]
+                final_fsw[contact_start_idx:contact_end_idx, k] = 1. # fsw[:, true_k + 0]
                 k += self.output_dict['contact']
 
             if 'movable' in self.output_dict:

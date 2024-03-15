@@ -37,7 +37,7 @@ class TransformerModel:
 
         self.input_args = cfg.data_params.inputs.keys()
         self.input_size = sum(cfg.data_params.inputs.values())
-        self.output_args = cfg.data_params.outputs.keys()
+        self.output_args = cfg.data_params.outputs
         self.output_size = sum(cfg.data_params.outputs.values())
         self.num_obstacles = cfg.data_params.obstacles
 
@@ -174,46 +174,46 @@ class TransformerModel:
             if 'confidence' in self.output_args:
                 confidence_mask = (targ_clone[:, :, k+0:k+1]).float()
                 loss_list.append(torch.sum(self.confidence_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) * mask)/torch.sum(mask))
-                k += 1
+                k += self.output_args['confidence']
 
                 # obstacle_losses.append(loss_list[-1].item())
                 # print('confidence', loss_list[-1].item())
 
             if 'contact' in self.output_args:
                 loss_list.append(torch.sum(self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) * mask)/torch.sum(mask))
-                k += 1
+                k += self.output_args['contact']
                 # obstacle_losses.append(loss_list[-1].item())
                 # print('contact', loss_list[-1].item())
 
             if 'movable' in self.output_args:
                 loss_list.append(torch.sum((self.movable_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
-                k += 1
+                k += self.output_args['movable']
                 # obstacle_losses.append(loss_list[-1].item())
                 # print('movable', loss_list[-1].item())
 
             if 'pose' in self.output_args:
                 # poses.append(out[:, :, k:k+2])
                 loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
-                k += 1
+                k += self.output_args['pose']//3
                 # obstacle_losses.append(loss_list[-1].item())
                 # print('pose x', loss_list[-1].item())
 
                 loss_list.append(torch.sum((self.pos_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) * 2 *  confidence_mask) * mask)/torch.sum(mask))
-                k += 1
+                k += 1 # self.output_args['pose']//3
                 # obstacle_losses.append(loss_list[-1].item())
                 # print('pose y', loss_list[-1].item())
 
                 loss_list.append(torch.sum((self.yaw_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
-                k += 1
+                k += 1 # self.output_args['pose']//3
                 # obstacle_losses.append(loss_list[-1].item())
                 # print('yaw', loss_list[-1].item())
 
             if 'size' in self.output_args:
                 loss_list.append(torch.sum((self.size_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
-                k += 1
+                k += 1 # self.output_args['size']//2
 
                 loss_list.append(torch.sum((self.size_loss(out[:, :, k:k+1], targ[:, :, k:k+1]) *  confidence_mask) * mask)/torch.sum(mask))
-                k += 1
+                k += 1 # self.output_args['size']//2
 
                 # obstacle_losses.append(loss_list[-1].item())
                 # print('size', loss_list[-1].item())
@@ -292,8 +292,11 @@ class TransformerModel:
         else:
             with open(test_data_source, 'rb') as file:
                 test_datafiles += pickle.load(file)
+        
+        random.shuffle(test_datafiles)
+        # test_datafiles[:500]
         # test_datafiles = glob.glob(f"{test_data_source}")
-        test_dataset = TransformerDataset(self.data_params, test_datafiles, sequence_length=self.model_params.sequence_length)
+        test_dataset = TransformerDataset(self.data_params, test_datafiles[:500], sequence_length=self.model_params.sequence_length)
 
         # initialize the dataloaders
         test_loader = DataLoader(test_dataset, batch_size=self.train_params.test_batch_size, shuffle=True)
@@ -363,31 +366,32 @@ class TransformerModel:
 
                 k = 0
                 gt_k = 0
+
+                contact_end_idx = 0
                 for obs_idx in range(self.num_obstacles):
                     if obs_idx == 0:
                         sub_key = 'movable'
                     else:
                         sub_key = 'static'
 
-                    # first_contact = 0
-                    # check_first_contact = gt_target[0, :, gt_k+0:gt_k+1].nonzero()
-                    # if len(check_first_contact) > 0:
-                    #     try:
-                    #         first_contact = check_first_contact.nonzero()[0][0]
-                    #     except:
-                    #         gt_k += 9
-                    #         k += self.output_size
-                    #         continue
-                    # else:
-                    #     gt_k += 9
-                    #     k += self.output_size
-                    #     continue
-                    contact_end_idx = done_idx-1
-                    contact_points = (torch.sigmoid(out[:, :done_idx, k]) > 0.6).nonzero()
+                    contact_points = (torch.sigmoid(out[:, :done_idx, k]) > 0.8).nonzero()
+                    if len(contact_points) > 0:
+                        if contact_points[-1][-1] > contact_end_idx:
+                            contact_end_idx = contact_points[-1][-1]
+                    k += self.output_size
+
+                k = 0                    
+                for obs_idx in range(self.num_obstacles):
+                    if obs_idx == 0:
+                        sub_key = 'movable'
+                    else:
+                        sub_key = 'static'
+                    
+                    contact_points = (torch.sigmoid(out[:, :done_idx, k]) > 0.8).nonzero()
                     if len(contact_points) > 0:
                         contact_idx = contact_points[0][-1]
                         contact_start_idx = contact_points[0][-1]
-                        contact_end_idx = min(contact_end_idx, contact_points[-1][-1])
+                        # contact_end_idx = max(contact_end_idx, contact_points[-1][-1])
                         if contact_start_idx  == contact_end_idx:
                             gt_k += 9
                             k += self.output_size
@@ -398,24 +402,24 @@ class TransformerModel:
                         continue
 
                     if 'confidence' in self.output_args:
-                        k += 1 # self.output_args['confidence']
+                        k += self.output_args['confidence']
                     
                     if 'contact' in self.output_args:
                         # record_seq_loss.append(self.contact_loss(out[:, :, k+0:k+1], targ[:, :, k+0:k+1]))
                         # record_final_loss.append(self.contact_loss(out[:, done_idx, k+0:k+1], targ[:, done_idx, k+0:k+1]))
-                        k += 1 # self.output_args['contact']
+                        k += self.output_args['contact'] # self.output_args['contact']
                     if 'movable' in self.output_args:
                         success_mov_class = ((torch.sigmoid(out[:, :, k:k+1]) > 0.5) * 1. == targ[:, :, k:k+1]) * 1.0
                         # movable_loss = F.binary_cross_entropy_with_logits(out[:, :, k:k+1], targ[:, :, k:k+1], reduction='none')
                         record_seq_loss['movable'][sub_key].append((torch.sum(success_mov_class[0, contact_start_idx:contact_end_idx, :], dim=0)/(contact_end_idx-contact_start_idx)).cpu().numpy())
                         record_final_loss['movable'][sub_key].append(success_mov_class[0, contact_end_idx, :].cpu().numpy())
-                        k += 1 # self.output_args['movable']
+                        k += self.output_args['movable']# self.output_args['movable']
                     
                     if 'pose' in self.output_args:
                         out[:, :, k:k+3] = out[:, :, k:k+3] # * self.targ_scale[2:5]
                         targ[:, :, k:k+3] = targ[:, :, k:k+3] # * self.targ_scale[2:5]
                         pos_loss = torch.abs(out[:, :, k:k+3] - targ[:, :, k:k+3])
-
+                        
                         # print(torch.sum(pos_loss[0, first_contact:done_idx, :], dim=0), (pos_loss[0, first_contact:done_idx, :]).shape, (done_idx-first_contact), pos_loss[0, done_idx, :].cpu().numpy())
 
                         # plt.plot(pos_loss[0, first_contact:done_idx, 0].cpu().numpy())
@@ -424,7 +428,7 @@ class TransformerModel:
 
                         record_seq_loss['pose'][sub_key].append((torch.sum(pos_loss[0, contact_start_idx:contact_end_idx, :], dim=0)/(contact_end_idx-contact_start_idx)).cpu().numpy())
                         record_final_loss['pose'][sub_key].append(pos_loss[0, contact_end_idx, :].cpu().numpy())
-                        k += 3 # self.output_args['pose']
+                        k += self.output_args['pose']
                     
                     if 'size' in self.output_args:
                         out[:, :, k:k+2] = out[:, :, k:k+2] # * self.targ_scale[5:7]
@@ -433,7 +437,7 @@ class TransformerModel:
                         size_loss = torch.abs(out[:, :, k:k+2] - targ[:, :, k:k+2])
                         record_seq_loss['size'][sub_key].append((torch.sum(size_loss[0, contact_start_idx:contact_end_idx, :], dim=0)/(contact_end_idx-contact_start_idx)).cpu().numpy())
                         record_final_loss['size'][sub_key].append(size_loss[0, contact_end_idx, :].cpu().numpy())
-                        k += 2 # self.output_args['size']
+                        k += self.output_args['size']
 
                     
                     intersection_seq, union_seq = get_bbox_intersections(targ_iou[:, contact_start_idx:contact_end_idx, k-5:k], out_iou[:, contact_start_idx:contact_end_idx, k-5:k])
@@ -466,6 +470,31 @@ class TransformerModel:
     def test_real(self, data_source, log_folder):
         datafiles = data_source
         
+        full_seq_data = []
+        
+        record_seq_loss_main = {
+            'contact': {
+                'movable': [],
+                'static': []
+                },
+            'movable': {
+                'movable': [],
+                'static': []
+                },
+            'pose': {
+                'movable': [],
+                'static': []
+                },
+            'size': {
+                'movable': [],
+                'static': []
+                },
+            'iou': {
+                'movable': [],
+                'static': []
+            }
+        }
+        
         record_final_loss = {
             'contact': {
                 'movable': [],
@@ -496,8 +525,35 @@ class TransformerModel:
         self.model.eval()
         with torch.no_grad():
             for i, (inp, targ, mask, pose) in tqdm(enumerate(dataloader)):
-                # if i == 1:
-                #     break
+                record_seq_loss = {
+                    'contact': {
+                        'movable': [],
+                        'static': []
+                        },
+                    'movable': {
+                        'movable': [],
+                        'static': []
+                        },
+                    'pose': {
+                        'movable': [],
+                        'static': []
+                        },
+                    'size': {
+                        'movable': [],
+                        'static': []
+                        },
+                    'iou': {
+                        'movable': [],
+                        'static': []
+                    },
+                    'contact_window':{
+                        'movable': [],
+                        'static': []
+                    },
+                    'datafile': datafiles[i]
+                }
+                # record_seq_loss['datafile'] = datafiles[i]
+
                 inp, targ, mask = inp.to(self.device), targ.to(self.device), mask.to(self.device)
                 out = self.model(inp, src_mask = self.src_mask)
 
@@ -511,82 +567,95 @@ class TransformerModel:
                     pose *= self.pose_scale
                     self.save_real_animation(pose, targ, out, mask, log_folder)
 
-                final_contact_idx = done_idx
+                final_contact_idx = 0
                 k = 0 
                 for sub_key in ['movable', 'static']:
                     if 'confidence' in self.output_args:
-                        confidence = (torch.sigmoid(out[0, :done_idx, k]) > 0.6) * 1.0
+                        conf_thresh = 0.6 if sub_key == 'static' else 0.6
+                        confidence = (torch.sigmoid(out[0, :done_idx, k]) > conf_thresh) * 1.0
                         contact_points = confidence.nonzero()
                         if len(contact_points) > 0:
-                            
                             contact_end_idx = contact_points[-1][0]
-                            if contact_end_idx < final_contact_idx:
+                            print(sub_key, contact_end_idx)
+                            if contact_end_idx > final_contact_idx:
                                 final_contact_idx = contact_end_idx
-                        k += 8
+                        k += self.output_size
 
                 # add metrics here to measure performance
                 k = 0
                 targ_k = 0
-                start_k = 3
+                start_k = 0
                 start_targ_k = 0
                 for sub_key in ['movable', 'static']:
-                    # confidence = 1.
-                    # start_k += 3
                     contact_start_idx, contact_end_idx, contact_idx = 0, 0, None
                     if 'confidence' in self.output_args:
-                        confidence = (torch.sigmoid(out[0, :done_idx, k]) > 0.6) * 1.0
+                        conf_thresh = 0.6 if sub_key == 'static' else 0.6
+                        confidence = (torch.sigmoid(out[0, :done_idx, k]) > conf_thresh) * 1.0
                         contact_points = confidence.nonzero()
                         if len(contact_points) > 0:
                             contact_start_idx = contact_points[0][0]
-                            print('contact', contact_start_idx, final_contact_idx, done_idx)
-                        k += 1
+                            print(sub_key, contact_start_idx)
+                            record_seq_loss['contact_window'][sub_key] = [contact_start_idx.item(), final_contact_idx.item()]
+                            # print('contact', contact_start_idx, final_contact_idx, done_idx)
+                        k += self.output_args['confidence']
+                        start_k += self.output_args['confidence']
 
                     if 'contact' in self.output_args:
-                        k += 1
+                        k += self.output_args['contact']
+                        start_k += self.output_args['contact']
 
                     if 'movable' in self.output_args:
-                        k += 1
+                        k += self.output_args['movable']
+                        start_k += self.output_args['movable']
 
                     if 'pose' in self.output_args:
-                        # out[:, :, k:k+3] = out[:, :, k:k+3] * self.targ_scale[2:5]
-                        # if confidence > 0.4:
                         pos_loss = torch.abs(out[:, :, k:k+3] - targ[:, :, targ_k:targ_k+3])
                         record_final_loss['pose'][sub_key].append(pos_loss[0, final_contact_idx, :].cpu().numpy())
-                        k += 3
-                        targ_k += 3
+                        # record_seq_loss['pose'][sub_key].append(pos_loss[0, contact_start_idx:final_contact_idx, :].clone().cpu().numpy().tolist())
+                        k += self.output_args['pose']
+                        start_k += self.output_args['pose']
+                        targ_k += self.output_args['pose']
+                        
                     
                     if 'size' in self.output_args:
-                        # out[:, :, k:k+2] = out[:, :, k:k+2] * self.targ_scale[5:7]
-                        # if confidence > 0.5:
                         size_loss = torch.abs(out[:, :, k:k+2] - targ[:, :, targ_k:targ_k+2])
                         record_final_loss['size'][sub_key].append(size_loss[0, final_contact_idx, :].cpu().numpy())
-                            
-                        k += 2 # self.output_args['size']
-                        targ_k += 2
+                        # record_seq_loss['size'][sub_key].append(size_loss[0, contact_start_idx:final_contact_idx, :].clone().cpu().numpy().tolist())
+                        k += self.output_args['size']
+                        start_k += self.output_args['size']
+                        targ_k += self.output_args['size']
+                        
 
                     out_iou = out.clone().cpu().numpy()
                     targ_iou = targ.clone().cpu().numpy()
                     
                     if targ[0, 2, start_targ_k] > 0.:
-                        intersection, union = get_bbox_intersections(targ_iou[:, final_contact_idx-1:final_contact_idx, start_targ_k:start_targ_k+targ_k], out_iou[:, final_contact_idx-1:final_contact_idx, start_k:start_k+5])
+                        intersection, union = get_bbox_intersections(targ_iou[:, contact_start_idx:final_contact_idx, start_targ_k:start_targ_k+targ_k], out_iou[:, contact_start_idx:final_contact_idx, start_k-5:start_k])
+                        # print(intersection.shape, union.shape, (intersection[0, :]/union[0, :]).shape)
+                        record_seq_loss['iou'][sub_key].append((intersection[0, :]/union[0, :]).tolist())
+                        
+                        out_iou = out.clone().cpu().numpy()
+                        targ_iou = targ.clone().cpu().numpy()
+
+                        intersection, union = get_bbox_intersections(targ_iou[:, final_contact_idx-1:final_contact_idx, start_targ_k:start_targ_k+targ_k], out_iou[:, final_contact_idx-1:final_contact_idx, start_k-5:start_k])
                         record_final_loss['iou'][sub_key].append((intersection[0, :]/union[0, :]))
 
-                    start_k += 8
+
+
                     start_targ_k += targ_k
+
+                full_seq_data.append(record_seq_loss)
                     
         # get means
+        
         for key in list(record_final_loss.keys()):
             for sub_key in ['movable', 'static']:
                 if len(record_final_loss[key][sub_key]) > 0:
-                    # print(np.concatenate(record_final_loss[key][sub_key]))
-                    plt.hist(np.histogram(np.concatenate(record_final_loss[key][sub_key])), bins='auto')
-                    plt.savefig(f'test_{key}_{sub_key}.png')
-
                     record_final_loss[key][sub_key] = np.mean(record_final_loss[key][sub_key], axis=0).tolist()
                 else:
                     del record_final_loss[key][sub_key]
 
-        return {'final_loss': record_final_loss}
+        return {'full_seq_data': full_seq_data, 'final_loss': record_final_loss}
                     
     def save_real_animation(self, pose, targ, out, mask, log_folder):
         # save animations
@@ -605,9 +674,6 @@ class TransformerModel:
         first_contact = min(contact_1_first, contact_2_first)
         last_contact = max(contact_1_last, contact_2_last)
 
-        print(first_contact, last_contact, done_idx)
-
-        # print(done_idx, contact_1_last)
         for step in range(pose.shape[1]):
             pose = pose.to('cpu')
             targ = targ.to('cpu')
@@ -619,8 +685,18 @@ class TransformerModel:
             else:
                 step_idx_1 = step if step < last_contact else last_contact
                 step_idx_2 = step if step < last_contact else last_contact
-                mod_out = torch.cat([out[0, step_idx_1, :8], out[0, step_idx_2, 8:]], dim=-1)
-            # print(mod_out.shape)
+
+                if step < contact_1_first:
+                    _first = torch.zeros_like(out[0, step_idx_1, :8])
+                else:
+                    _first = out[0, step_idx_1, :8]
+                if step < contact_2_first:
+                    _second = torch.zeros_like(out[0, step_idx_2, 8:])
+                else:
+                    _second = out[0, step_idx_2, 8:]
+                
+                mod_out = torch.cat([_first, _second], dim=-1)
+            
             if mask[0, step, 0]:
                 patch_set = get_real_visualization(self.num_obstacles, pose[0, step, :], targ[0, step, :], mod_out)
                 patches.append(patch_set)
@@ -628,7 +704,7 @@ class TransformerModel:
                 break
 
         fig, ax = plt.subplots(1, 1, figsize=(19.2, 10.8), dpi=100)
-        # ax.axis('off')
+        ax.axis('off')
         ax.set(xlim=(-1.0, 4.0), ylim=(-1, 1), aspect='auto')
         last_patch = []
 
@@ -659,37 +735,14 @@ class TransformerModel:
         # save animations
         patches = []
 
-        # done_idx = (mask[0]).nonzero()[-1][0]
-        # contact_1_first, contact_1_last, contact_2_first, contact_2_last = 1500, 0, 1500, 0
-        
-        # contact_1 = (torch.sigmoid(out[0, :done_idx, 0])>0.5).nonzero()
-        # if len(contact_1) > 0:
-        #     contact_1_first = contact_1[0, 0]
-        #     contact_1_last = contact_1[-1, 0]
-        # contact_2 = (torch.sigmoid(out[0, :done_idx, self.output_size])>0.5).nonzero()
-        # if len(contact_2) > 0:
-        #     contact_2_first = contact_2[0, 0]
-        #     contact_2_last = contact_2[-1, 0]
-
-        # last_contact = max(contact_1_last, contact_2_last)
-
-
-
         for step in range(pose.shape[1]):
-            
-            # if step < last_contact:
-            #     mod_out = torch.zeros_like(out[0, step, :])
-            # else:
-            #     step_idx_1 = step if step < last_contact else last_contact
-            #     step_idx_2 = step if step < last_contact else last_contact
-            #     mod_out = torch.cat([out[0, step_idx_1, :self.output_size], out[0, step_idx_2, self.output_size:]], dim=-1)
-
+            # print(step)
             if mask[0, step, 0]:
                 patch_set = get_visualization(self.output_args, self.output_size, self.num_obstacles,  0, pose[:, step, :]*self.pose_scale, targ[:, step, :]*self.targ_scale, pose[:, step, :]* self.pose_scale, out[:, step, :]*self.targ_scale, fsw[:, step, :]*self.fsw_scale)
                 patches.append(patch_set)
             else:
                 break
-
+        print(len(patches))
         with open(f'{self.viz_path}/plot_{self.total_animations}.pkl', 'wb') as f:
                 pickle.dump(patches, f)
         self.total_animations += 1

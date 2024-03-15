@@ -7,8 +7,8 @@ class RunCfg(PrefixProto):
         model_name = 'transformer' # 'transformer', 'velocity_model'
         save_root = '/common/home/dm1487/robotics_research/legged_manipulation/gaited-walk/scene_predictor'
         log_folder = 'results'
-        experiments_folder = 'experiments_feb23_new_policy'
-        real_experiments_folder = 'real_experiments'
+        experiments_folder = 'experiments_14_mar_same_policy/2_obs'
+        real_experiments_folder = 'real_experiments/13_mar'
         class train:
             # data_source = [
             #     '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19/movable_1_obs/balanced/train_0.pkl', 
@@ -24,11 +24,12 @@ class RunCfg(PrefixProto):
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_0.pkl', 
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_imm.pkl',
                 '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_mv.pkl',
-                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_2.pkl'
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb22/2_obs/balanced/train_2.pkl',
+                '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_mar14/3_obs/no_balanced/train_3.pkl'
             ]
 
             inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
-            outputs = ['confidence', 'pose', 'size']
+            outputs = ['confidence', 'contact', 'movable', 'pose', 'size']
             # inputs = ['joint_pos', 'joint_vel', 'torques']
             # outputs = ['velocity']
 
@@ -41,32 +42,41 @@ class RunCfg(PrefixProto):
             #     ]
             
             data_source = [
-                [
-                    '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb23_same_policy/2_obs/balanced/train_imm.pkl',
-                ],
-                [
-                    '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb23_same_policy/2_obs/balanced/train_mv.pkl',
-                ],
+                # [
+                #     '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb23_same_policy/2_obs/balanced/train_imm.pkl',
+                # ],
+                # [
+                #     '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb23_same_policy/2_obs/balanced/train_mv.pkl',
+                # ],
                 [
                     '/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb23_same_policy/2_obs/balanced/train_2.pkl'
                 ]
+
                 # ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_mv.pkl'], 
                 # ['/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24_play_feb19_test/2_obs/balanced/train_2.pkl']
-            ]  * 1
+            ]  * 5
 
             log_folder = 'losses'
             
-            inputs = [['joint_pos', 'joint_vel', 'torques', 'pose']] * 3
-            outputs = [['confidence', 'contact', 'movable', 'pose', 'size']] * 3
+            inputs = [
+                ['joint_pos', 'joint_vel', 'torques', 'pose'],
+                ['joint_pos', 'joint_vel', 'torques'],
+                ['joint_pos', 'joint_vel'],
+                ['joint_pos'],
+                ['torques', 'pose']
+            ]
+            outputs = [['confidence', 'movable', 'pose', 'size']] * 5
             ckpt = [
                 # '2_obs/q_to_cdctmvposesize/2024-02-22_20-48-49/checkpoints/transformer_weights_9.pt',
-                '2_obs/qqdtaupose_to_cdctmvposesize/2024-03-07_22-01-46/checkpoints/transformer_weights_5.pt',
-                '2_obs/qqdtaupose_to_cdctmvposesize/2024-03-07_22-01-46/checkpoints/transformer_weights_5.pt',
-                '2_obs/qqdtaupose_to_cdctmvposesize/2024-03-07_22-01-46/checkpoints/transformer_weights_5.pt',
+                '2_obs/qqdtaupose_to_cdmvposesize/2024-03-13_01-22-25/checkpoints/transformer_weights_12.pt',
+                '2_obs/qqdtau_to_cdmvposesize/2024-03-13_01-27-16/checkpoints/transformer_weights_12.pt',
+                '2_obs/qqd_to_cdmvposesize/2024-03-13_01-27-48/checkpoints/transformer_weights_12.pt',
+                '2_obs/q_to_cdmvposesize/2024-03-13_01-28-25/checkpoints/transformer_weights_12.pt',
+                '2_obs/taupose_to_cdmvposesize/2024-03-13_01-29-04/checkpoints/transformer_weights_12.pt',
                 # '2_obs/qqdtaupose_to_cdctmvposesize/2024-02-23_23-11-16/checkpoints/transformer_weights_10.pt',
                 # '2_obs/pose_to_cdctmvposesize/2024-02-22_20-57-43/checkpoints/transformer_weights_9.pt',
             ]
-            experiment_name = ['2024-03-07_22-01-46_easy_mv_all_from_qqdottaupose', '2024-03-07_22-01-46_easy_imm_all_from_qqdottaupose', '2024-03-07_22-01-46_medium_all_from_qqdottaupose']
+            experiment_name = ['qqdtaupose_to_cdmvposesize', 'qqdtau_to_cdmvposesize', 'qqd_to_cdmvposesize', 'q_to_cdmvposesize', 'taupose_to_cdmvposesize']
 
             # inputs = [['pose'], ['pose'], ['pose']]
             # outputs = [['pose'], ['pose'], ['pose']]
@@ -88,21 +98,25 @@ class RunCfg(PrefixProto):
             # log_folder = '3_mar_easy_static/2024-03-09_10-14-42'
             
             # movable
-            sub_folders = ['3_mar_easy_movable', '8_mar_easy_movable/aug26', '8_mar_easy_movable/feb22', '8_mar_easy_movable/feb23']
-            log_folder = '9_mar/all_easy_movable/2024-03-09_10-14-42'
+            # sub_folders = ['3_mar_easy_movable', '8_mar_easy_movable/aug26', '8_mar_easy_movable/feb22', '8_mar_easy_movable/feb23']
+            # log_folder = '9_mar/all_easy_movable/2024-03-07_22-01-46'
 
             # static
             # sub_folders = ['3_mar_easy_static', '8_mar_easy_static/aug26', '8_mar_easy_static/aug30', '8_mar_easy_static/feb21', '8_mar_easy_static/feb22']
-            # log_folder = '9_mar/all_easy_static/2024-03-09_10-14-42'
+            # log_folder = '9_mar/all_easy_static/2024-03-07_22-01-46'
+
+            
 
             # # medium
-            # sub_folders = ['3_mar_medium', '8_mar_medium/aug26', '8_mar_medium/aug30', '8_mar_medium/feb21', '8_mar_medium/feb22']
-            # log_folder = '9_mar/all_medium/2024-03-09_10-14-42'
+            sub_folders = ['3_mar_medium', '8_mar_medium/aug26', '8_mar_medium/aug30', '8_mar_medium/feb21', '8_mar_medium/feb22']
+            log_folder = '9_mar/all_medium/2024-03-14_18-50-22'
 
             inputs = ['joint_pos', 'joint_vel', 'torques', 'pose']
             outputs = ['confidence', 'contact', 'movable', 'pose', 'size']
             save_directory = ''
-            ckpt = '2_obs/qqdtaupose_to_cdctmvposesize/2024-03-09_10-14-42/checkpoints/transformer_weights_2.pt'
+            
+            # ckpt = '2_obs/qqdtaupose_to_cdctmvposesize/2024-03-07_22-01-46/checkpoints/transformer_weights_10.pt'
+            ckpt = '2_obs/qqdtaupose_to_cdctmvposesize/2024-03-14_18-50-22/checkpoints/transformer_weights_3.pt'
             experiment_name = 'full_prediction_real'
 
     class transformer:
@@ -138,7 +152,7 @@ class RunCfg(PrefixProto):
             train_batch_size = 16
             val_batch_size = 16
             test_batch_size = 1
-            train_test_split = 0.95
+            train_test_split = 0.98
 
         class loss_scales:
             confidence_scale = 1

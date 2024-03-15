@@ -40,10 +40,15 @@ class Runner:
             'inputs': inputs,
             'outputs': outputs,
             'ckpt': ckpt,
-            'recorded_loss': recorded_loss
+            'recorded_loss': {
+                'final_loss': recorded_loss['final_loss']
+            }
         }
         with open(f'{log_folder}/{results_json}', 'w') as f:
             json.dump(data, f)
+
+        with open(f'{log_folder}/contact_window_results.json', 'w') as f:
+            json.dump(recorded_loss['full_seq_data'], f)
 
 if __name__ == '__main__':
     import argparse

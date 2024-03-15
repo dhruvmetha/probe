@@ -49,9 +49,8 @@ def get_real_visualization(obstacle_count,
     
     k = 3
     for i in range(obstacle_count):
-        # conf_threshold = 0.8 if i == 0 else 0.75
-        confidence = torch.sigmoid(pred_obstacle_params[k-3]).item()
-        contact = torch.sigmoid(pred_obstacle_params[k-2])
+        # confidence = (torch.sigmoid(pred_obstacle_params[k-3]).item() > 0.6) * 1.0
+        confidence = torch.sigmoid(pred_obstacle_params[k-2]).item()
         movable = torch.sigmoid(pred_obstacle_params[k-1])
         obs_pos = np.array(pred_obstacle_params[k:k+2])
         obs_rot = np.array(pred_obstacle_params[k+2])  * 180/np.pi
@@ -109,6 +108,10 @@ def get_visualization(args, args_size, num_obstacles, idx, obs, priv_obs, pred_o
             # alpha = 0.3 if contact.item() < 0.5 else 0.8
             if 'movable' in args:
                 movable = torch.sigmoid(pred[idx][j])
+                if priv_obs[idx][j] == 1:
+                    block_color = 'yellow'
+                if fsw[idx][fsw_j] == 1:
+                    block_color_fsw = 'yellow'
                 j += 1
                 fsw_j += 1
             else:

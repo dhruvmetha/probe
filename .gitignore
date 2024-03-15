@@ -85,3 +85,5 @@ real_robot_data/
 scene_predictor/real data videos
 demo_vids*
 *.csv*
+test_folder/
+test*.png

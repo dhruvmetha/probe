@@ -26,6 +26,8 @@ def remove_files(files, here):
                 print('pose error', file)
                 os.remove(file)
 
+            if data['target_env'][100, 2] > 0 and data['target_env'][100, 11] > 0 and data['target_env'][100, 20] > 0:
+                print(data['target_env'][100, 2], data['target_env'][100, 11], data['target_env'][100, 20])
             data['done']
             data['target_env']
             data['target']
@@ -66,6 +68,7 @@ def main(all_files):
         worker.join()
 
 if __name__ == '__main__':
+    import random
     # dest_path = Path(f'/common/users/dm1487/legged_manipulation/rollout_data/exploration_single_trajectories')
     # files = sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_3_single_trajectories1/*/*.npz')) + sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_4_single_trajectories1/*/*.npz')) + sorted(glob('/common/users/dm1487/legged_manipulation/rollout_data/exploration_6_single_trajectories1/*/*.npz'))
 
@@ -79,12 +82,13 @@ if __name__ == '__main__':
     # files = glob('/common/users/dm1487/legged_manipulation_data_store/trajectories/aug27/2_obs/1/*/*.npz')
     root_path = '/common/users/dm1487/legged_manipulation_data_store'
     root_traj_path = f'{root_path}/trajectories'
-    sub_path = 'iros24_play_feb23_new_policy/2_obs'
+    sub_path = 'iros24_play_mar14/3_obs'
 
     files = glob(f'{root_traj_path}/{sub_path}/*/*/*.npz')
     # with open('/common/users/dm1487/legged_manipulation_data_store/trajectories/iros24/balanced/train_1.pkl', 'rb') as f:
     #     files = pickle.load(f)
     print(len(files))
+    random.shuffle(files)
     main(files)
     
     
